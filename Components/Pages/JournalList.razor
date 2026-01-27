@@ -1,0 +1,675 @@
+@page "/journal"
+@using JournalApp.Models
+@using JournalApp.Services
+@inject JournalService JournalService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<div class="journal-list">
+    <div class="header">
+        <h3><i class="bi bi-journal-text"></i> Journal Entries</h3>
+        <button class="btn btn-primary" @onclick="NewEntry"><i class="bi bi-pencil-square"></i> New Entry</button>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="search-filter">
+        <div class="search-box">
+            <input type="text" @bind="searchTerm" @bind:event="oninput" placeholder=" Search entries..." class="form-control" @onkeyup="PerformSearch" />
+        </div>
+
+        <button class="btn btn-secondary" @onclick="ToggleFilters">
+            <i class="bi bi-funnel"></i> @(showFilters ? "Hide" : "Show") Filters
+        </button>
+    </div>
+
+    @if (showFilters)
+    {
+        <div class="filters">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>Start Date</label>
+                    <input type="date" @bind="filterStartDate" @bind:format="yyyy-MM-dd" class="form-control" />
+                </div>
+                <div class="filter-group">
+                    <label>End Date</label>
+                    <input type="date" @bind="filterEndDate" @bind:format="yyyy-MM-dd" class="form-control" />
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>Moods</label>
+                <div class="mood-filter">
+                    @foreach (var mood in MoodConfig.AllMoods)
+                    {
+                        <label class="checkbox-label">
+                            <input type="checkbox" checked="@filterMoods.Contains(mood)" @onchange="e => ToggleMoodFilter(mood)" />
+                            @mood
+                        </label>
+                    }
+                </div>
+            </div>
+
+            <div class="filter-actions">
+                <button class="btn btn-primary" @onclick="ApplyFilters">Apply Filters</button>
+                <button class="btn btn-secondary" @onclick="ClearFilters">Clear</button>
+            </div>
+        </div>
+    }
+
+    <!-- Entries Display -->
+    @if (isLoading)
+    {
+        <div class="loading">Loading...</div>
+    }
+    else if (displayedEntries.Count == 0)
+    {
+        <div class="empty-state">
+            <p> No entries found. Start your journaling journey today!</p>
+            <button class="btn btn-success" @onclick="NewEntry">Create First Entry</button>
+        </div>
+    }
+    else
+    {
+        <div class="entries-grid">
+            @foreach (var entry in displayedEntries)
+            {
+                <div class="entry-card">
+                    <div class="entry-header">
+                        <h4>@entry.Title</h4>
+                        <span class="mood-badge @GetMoodClass(entry.PrimaryMood)">
+                            @GetMoodEmoji(entry.PrimaryMood) @entry.PrimaryMood
+                        </span>
+                    </div>
+
+                    <p class="entry-date"><i class="bi bi-calendar-event"></i> @entry.EntryDate.ToString("MMMM dd, yyyy")</p>
+
+                    <p class="entry-preview">
+                        @GetPreviewText(entry.Content, 150)
+                    </p>
+
+                    @{
+                        var tags = entry.GetTags();
+                    }
+                    @if (tags.Any())
+                    {
+                        <div class="entry-tags">
+                            @foreach (var tag in tags.Take(3))
+                            {
+                                <span class="tag">@tag</span>
+                            }
+                            @if (tags.Count > 3)
+                            {
+                                <span class="tag-more">+@(tags.Count - 3) more</span>
+                            }
+                        </div>
+                    }
+
+                    <div class="entry-footer">
+                        <span class="word-count">@entry.WordCount words</span>
+                        <div class="entry-actions">
+                            <button class="btn-icon" @onclick="() => EditEntry(entry.Id)"><i class="bi bi-pencil"></i></button>
+                            <button class="btn-icon delete" @onclick="() => DeleteEntry(entry.Id)"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (totalPages > 1)
+        {
+            <div class="pagination">
+                <button class="btn-page" @onclick="PreviousPage" disabled="@(currentPage == 1)">
+                    <i class="bi bi-chevron-left"></i> Previous
+                </button>
+                
+                <div class="page-numbers">
+                    @for (int i = 1; i <= totalPages; i++)
+                    {
+                        var pageNum = i;
+                        <button class="btn-page-number @(currentPage == pageNum ? "active" : "")" @onclick="() => GoToPage(pageNum)">
+                            @pageNum
+                        </button>
+                    }
+                </div>
+
+                <button class="btn-page" @onclick="NextPage" disabled="@(currentPage == totalPages)">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<JournalEntry> allEntries = new();
+    private List<JournalEntry> filteredEntries = new();
+    private List<JournalEntry> displayedEntries = new();
+    private bool isLoading = true;
+    private string searchTerm = string.Empty;
+    private bool showFilters = false;
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 9;
+    private int totalPages = 1;
+
+    // Filters
+    private DateTime? filterStartDate;
+    private DateTime? filterEndDate;
+    private List<string> filterMoods = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            if (!document.getElementById('bootstrap-icons')) {
+                const link = document.createElement('link');
+                link.id = 'bootstrap-icons';
+                link.rel = 'stylesheet';
+                link.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css';
+                document.head.appendChild(link);
+            }
+        ");
+        
+        await LoadEntries();
+    }
+
+    private async Task LoadEntries()
+    {
+        isLoading = true;
+        allEntries = await JournalService.GetAllEntriesAsync();
+        filteredEntries = allEntries;
+        ApplyPagination();
+        isLoading = false;
+    }
+
+    private void NewEntry()
+    {
+        NavigationManager.NavigateTo("/entry");
+    }
+
+    private void PerformSearch()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredEntries = allEntries;
+        }
+        else
+        {
+            filteredEntries = allEntries.Where(e =>
+                e.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                StripHtml(e.Content).Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+        currentPage = 1;
+        ApplyPagination();
+    }
+
+    private void ToggleFilters()
+    {
+        showFilters = !showFilters;
+    }
+
+    private void ToggleMoodFilter(string mood)
+    {
+        if (filterMoods.Contains(mood))
+            filterMoods.Remove(mood);
+        else
+            filterMoods.Add(mood);
+    }
+
+    private void ApplyFilters()
+    {
+        filteredEntries = allEntries;
+
+        // Apply date filters
+        if (filterStartDate.HasValue)
+        {
+            filteredEntries = filteredEntries.Where(e => e.EntryDate >= filterStartDate.Value).ToList();
+        }
+
+        if (filterEndDate.HasValue)
+        {
+            filteredEntries = filteredEntries.Where(e => e.EntryDate <= filterEndDate.Value).ToList();
+        }
+
+        // Apply mood filters
+        if (filterMoods.Any())
+        {
+            filteredEntries = filteredEntries.Where(e => filterMoods.Contains(e.PrimaryMood)).ToList();
+        }
+
+        currentPage = 1;
+        ApplyPagination();
+    }
+
+    private void ClearFilters()
+    {
+        filterStartDate = null;
+        filterEndDate = null;
+        filterMoods.Clear();
+        filteredEntries = allEntries;
+        currentPage = 1;
+        ApplyPagination();
+    }
+
+    private void ApplyPagination()
+    {
+        totalPages = (int)Math.Ceiling(filteredEntries.Count / (double)pageSize);
+        displayedEntries = filteredEntries
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            ApplyPagination();
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            ApplyPagination();
+        }
+    }
+
+    private void GoToPage(int page)
+    {
+        currentPage = page;
+        ApplyPagination();
+    }
+
+    private string StripHtml(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+            return string.Empty;
+
+        // Remove HTML tags using regex
+        var withoutTags = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ");
+        // Replace multiple spaces with single space
+        withoutTags = System.Text.RegularExpressions.Regex.Replace(withoutTags, @"\s+", " ");
+        // Decode HTML entities
+        withoutTags = System.Net.WebUtility.HtmlDecode(withoutTags);
+        return withoutTags.Trim();
+    }
+
+    private string GetPreviewText(string html, int maxLength)
+    {
+        var plainText = StripHtml(html);
+        
+        if (plainText.Length <= maxLength)
+            return plainText;
+        
+        return plainText.Substring(0, maxLength) + "...";
+    }
+
+    private string GetMoodEmoji(string mood)
+    {
+        return mood switch
+        {
+            "Happy" => "😊",
+            "Sad" => "😢",
+            "Angry" => "😠",
+            "Neutral" => "😐",
+            "Excited" => "🤩",
+            "Anxious" => "😰",
+            "Calm" => "😌",
+            "Grateful" => "🙏",
+            _ => "😐"
+        };
+    }
+
+    private string GetMoodClass(string mood)
+    {
+        return $"mood-{mood.ToLower()}";
+    }
+
+    private void EditEntry(int id)
+    {
+        NavigationManager.NavigateTo($"/entry/{id}");
+    }
+
+    private async Task DeleteEntry(int id)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this entry?"))
+        {
+            await JournalService.DeleteEntryAsync(id);
+            await LoadEntries();
+        }
+    }
+}
+
+<style>
+    .journal-list {
+        padding: 20px;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+    }
+
+    .header h3 {
+        color: #856404;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-primary {
+        background: #ffc107;
+        color: #212529;
+    }
+
+    .btn-primary:hover {
+        background: #ffb300;
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #5a6268;
+    }
+
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #218838;
+    }
+
+    .search-filter {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .search-box {
+        flex: 1;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #ffc107;
+        border-radius: 6px;
+        transition: border-color 0.3s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #ffb300;
+        box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+    }
+
+    .filters {
+        background: #fff3cd;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 2px solid #ffc107;
+    }
+
+    .filter-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .filter-group {
+        margin-bottom: 15px;
+    }
+
+    .filter-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #856404;
+    }
+
+    .mood-filter {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: normal;
+        color: #333;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .entries-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .entry-card {
+        background: white;
+        border: 2px solid #ffc107;
+        border-radius: 12px;
+        padding: 20px;
+        transition: all 0.3s;
+    }
+
+    .entry-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 6px 12px rgba(255, 193, 7, 0.3);
+        border-color: #ffb300;
+    }
+
+    .entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 10px;
+    }
+
+    .entry-header h4 {
+        margin: 0;
+        color: #333;
+        flex: 1;
+    }
+
+    .mood-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .entry-date {
+        color: #856404;
+        font-size: 14px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .entry-preview {
+        color: #666;
+        line-height: 1.6;
+        margin-bottom: 12px;
+    }
+
+    .entry-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+
+    .tag {
+        background: #fff3cd;
+        color: #856404;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+    }
+
+    .tag-more {
+        color: #856404;
+        font-size: 12px;
+        font-style: italic;
+    }
+
+    .entry-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #ffc107;
+    }
+
+    .word-count {
+        color: #856404;
+        font-size: 13px;
+    }
+
+    .entry-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-icon {
+        background: #ffc107;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #212529;
+    }
+
+    .btn-icon:hover {
+        background: #ffb300;
+    }
+
+    .btn-icon.delete {
+        background: #dc3545;
+        color: white;
+    }
+
+    .btn-icon.delete:hover {
+        background: #c82333;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin-top: 30px;
+    }
+
+    .btn-page {
+        padding: 8px 16px;
+        border: 2px solid #ffc107;
+        background: white;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #212529;
+    }
+
+    .btn-page:hover:not(:disabled) {
+        background: #fff3cd;
+    }
+
+    .btn-page:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .page-numbers {
+        display: flex;
+        gap: 6px;
+    }
+
+    .btn-page-number {
+        padding: 8px 12px;
+        border: 2px solid #ffc107;
+        background: white;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s;
+        color: #212529;
+    }
+
+    .btn-page-number:hover {
+        background: #fff3cd;
+    }
+
+    .btn-page-number.active {
+        background: #ffc107;
+        color: #212529;
+        border-color: #ffc107;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background: #fff3cd;
+        border-radius: 12px;
+        border: 2px solid #ffc107;
+    }
+
+    .empty-state p {
+        color: #856404;
+        font-size: 18px;
+        margin-bottom: 20px;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 60px;
+        font-size: 18px;
+        color: #856404;
+    }
+</style>

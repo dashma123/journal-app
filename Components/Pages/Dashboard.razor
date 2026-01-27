@@ -1,0 +1,742 @@
+@page "/dashboard"
+@using JournalApp.Models
+@using JournalApp.Services
+@inject JournalService JournalService
+@inject IJSRuntime JSRuntime
+
+<div class="dashboard">
+    <div class="header">
+        <h3> Dashboard & Analytics</h3>
+    </div>
+
+    <!-- Date Range Filter -->
+    <div class="date-filter">
+        <div class="filter-group">
+            <label><i class="bi bi-calendar-range"></i> Start Date</label>
+            <input type="date" @bind="startDate" @bind:format="yyyy-MM-dd" class="form-control" />
+        </div>
+        <div class="filter-group">
+            <label><i class="bi bi-calendar-check"></i> End Date</label>
+            <input type="date" @bind="endDate" @bind:format="yyyy-MM-dd" class="form-control" />
+        </div>
+        <button class="btn btn-primary" @onclick="LoadAnalytics"><i class="bi bi-funnel"></i> Apply Filter</button>
+        <button class="btn btn-secondary" @onclick="ClearFilter"><i class="bi bi-x-circle"></i> Clear</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading"><i class="bi bi-arrow-repeat spin"></i> Loading analytics...</div>
+    }
+    else if (analytics != null)
+    {
+        <!-- Key Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card highlight">
+                <div class="metric-icon"><i class="bi bi-emoji-smile"></i></div>
+                <div class="metric-content">
+                    <div class="metric-label">Most Frequent Mood</div>
+                    <div class="metric-value">@(string.IsNullOrEmpty(analytics.MostFrequentMood) ? "N/A" : analytics.MostFrequentMood)</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon"><i class="bi bi-fire"></i></div>
+                <div class="metric-content">
+                    <div class="metric-label">Current Streak</div>
+                    <div class="metric-value">@streakInfo.CurrentStreak days</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon"><i class="bi bi-trophy-fill"></i></div>
+                <div class="metric-content">
+                    <div class="metric-label">Longest Streak</div>
+                    <div class="metric-value">@streakInfo.LongestStreak days</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon"><i class="bi bi-pencil-fill"></i></div>
+                <div class="metric-content">
+                    <div class="metric-label">Total Entries</div>
+                    <div class="metric-value">@streakInfo.TotalEntries</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon"><i class="bi bi-chat-text"></i></div>
+                <div class="metric-content">
+                    <div class="metric-label">Avg Word Count</div>
+                    <div class="metric-value">@GetAverageWordCount()</div>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-icon"><i class="bi bi-exclamation-triangle"></i></div>
+                <div class="metric-content">
+                    <div class="metric-label">Missed Days (30d)</div>
+                    <div class="metric-value">@GetMissedDaysCount()</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mood Distribution -->
+        <div class="chart-section">
+            <h4><i class="bi bi-pie-chart-fill"></i> Mood Distribution by Category</h4>
+            <div class="chart-container">
+                @if (analytics.MoodDistribution != null && analytics.MoodDistribution.Any())
+                {
+                    <div class="pie-chart">
+                        @{
+                            var total = analytics.MoodDistribution.Values.Sum();
+                            var startAngle = 0.0;
+                        }
+                        @foreach (var mood in analytics.MoodDistribution.OrderByDescending(m => m.Value))
+                        {
+                            var percentage = (double)mood.Value / total;
+                            var angle = percentage * 360;
+                            var color = GetCategoryColor(mood.Key);
+                            
+                            <div class="pie-slice" style="--start: @startAngle; --angle: @angle; --color: @color;"></div>
+                            
+                            startAngle += angle;
+                        }
+                    </div>
+                    <div class="legend">
+                        @foreach (var mood in analytics.MoodDistribution.OrderByDescending(m => m.Value))
+                        {
+                            var percentage = analytics.CategoryPercentages.ContainsKey(mood.Key)
+                                ? analytics.CategoryPercentages[mood.Key]
+                                : 0;
+                            <div class="legend-item">
+                                <span class="legend-color" style="background: @GetCategoryColor(mood.Key);"></span>
+                                <span class="legend-label">@mood.Key</span>
+                                <span class="legend-value">@percentage.ToString("F1")%</span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="no-data">No mood data available</p>
+                }
+            </div>
+        </div>
+
+        <!-- Most Used Tags -->
+        <div class="chart-section">
+            <h4><i class="bi bi-tags-fill"></i> Most Used Tags</h4>
+            <div class="chart-container">
+                @if (analytics.TagFrequency != null && analytics.TagFrequency.Any())
+                {
+                    <div class="bar-chart">
+                        @{
+                            var maxCount = analytics.TagFrequency.Values.Max();
+                        }
+                        @foreach (var tag in analytics.TagFrequency.OrderByDescending(t => t.Value).Take(10))
+                        {
+                            var widthPercent = (double)tag.Value / maxCount * 100;
+                            <div class="bar-item">
+                                <div class="bar-label"><i class="bi bi-tag"></i> @tag.Key</div>
+                                <div class="bar-container">
+                                    <div class="bar-fill" style="width: @widthPercent%">
+                                        <span class="bar-count">@tag.Value</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="no-data">No tags data available</p>
+                }
+            </div>
+        </div>
+
+        <!-- Word Count Trends -->
+        <div class="chart-section">
+            <h4><i class="bi bi-graph-up"></i> Word Count Trends</h4>
+            <div class="chart-container">
+                @if (analytics.WordCountTrends != null && analytics.WordCountTrends.Any())
+                {
+                    <div class="line-chart">
+                        @{
+                            var maxWords = analytics.WordCountTrends.Max(w => w.WordCount);
+                            var minWords = analytics.WordCountTrends.Min(w => w.WordCount);
+                            var range = maxWords - minWords;
+                        }
+                        @for (int i = 0; i < analytics.WordCountTrends.Count; i++)
+                        {
+                            var trend = analytics.WordCountTrends[i];
+                            var heightPercent = range > 0 ? ((double)(trend.WordCount - minWords) / range * 100) : 50;
+                            var leftPercent = analytics.WordCountTrends.Count > 1
+                                ? ((double)i / (analytics.WordCountTrends.Count - 1)) * 100
+                                : 50;
+                            
+                            <div class="data-point" style="left: @leftPercent%; bottom: @heightPercent%;" title="@trend.Date.ToString("MMM dd"): @trend.WordCount words">
+                                <div class="point-label">@trend.WordCount</div>
+                            </div>
+                        }
+                    </div>
+                    <div class="chart-info">
+                        <small>Showing @analytics.WordCountTrends.Count entries</small>
+                    </div>
+                }
+                else
+                {
+                    <p class="no-data">No word count data available</p>
+                }
+            </div>
+        </div>
+
+        <!-- Missed Days -->
+        @if (GetMissedDaysCount() > 0)
+        {
+            <div class="chart-section">
+                <h4><i class="bi bi-calendar-x"></i> Recently Missed Days (Last 30 Days)</h4>
+                <div class="missed-days">
+                    @foreach (var day in streakInfo.MissedDays.OrderByDescending(d => d).Take(10))
+                    {
+                        <span class="missed-day"><i class="bi bi-x-circle-fill"></i> @day.ToString("MMM dd, yyyy")</span>
+                    }
+                    @if (streakInfo.MissedDays.Count > 10)
+                    {
+                        <span class="missed-more">+@(streakInfo.MissedDays.Count - 10) more</span>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private AnalyticsData? analytics;
+    private StreakInfo streakInfo = new();
+    private bool isLoading = true;
+    private DateTime? startDate;
+    private DateTime? endDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            if (!document.getElementById('bootstrap-icons')) {
+                const link = document.createElement('link');
+                link.id = 'bootstrap-icons';
+                link.rel = 'stylesheet';
+                link.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css';
+                document.head.appendChild(link);
+            }
+        ");
+        
+        await LoadAnalytics();
+    }
+
+    private async Task LoadAnalytics()
+    {
+        isLoading = true;
+        
+        analytics = await JournalService.GetAnalyticsAsync(startDate, endDate);
+        streakInfo = await JournalService.GetStreakInfoAsync();
+        
+        isLoading = false;
+    }
+
+    private async Task ClearFilter()
+    {
+        startDate = null;
+        endDate = null;
+        await LoadAnalytics();
+    }
+
+    private string GetCategoryColor(string category)
+    {
+        return category switch
+        {
+            "Positive" => "#4caf50",
+            "Neutral" => "#9e9e9e",
+            "Negative" => "#f44336",
+            _ => "#2196f3"
+        };
+    }
+
+    private int GetAverageWordCount()
+    {
+        if (analytics?.WordCountTrends == null || !analytics.WordCountTrends.Any())
+            return 0;
+        
+        return (int)analytics.WordCountTrends.Average(w => w.WordCount);
+    }
+
+    private int GetMissedDaysCount()
+    {
+        return streakInfo.MissedDays?.Count ?? 0;
+    }
+}
+
+<style>
+    .dashboard {
+        background-color: var(--page-bg);
+        color: var(--text-primary);
+    }
+
+    .header {
+        margin-bottom: 30px;
+    }
+
+    .header h3 {
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .header h3 i {
+        color: #fbc02d;
+        font-size: 28px;
+    }
+
+    .date-filter {
+        display: flex;
+        gap: 15px;
+        align-items: end;
+        margin-bottom: 30px;
+        padding: 20px;
+        background: var(--filter-bg);
+        border-radius: 12px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .filter-group {
+        flex: 1;
+    }
+
+    .filter-group label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .filter-group label i {
+        color: #fbc02d;
+    }
+
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 40px;
+    }
+
+    .metric-card {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 24px;
+        background: var(--card-bg);
+        border-radius: 12px;
+        border: 2px solid var(--border-color);
+        transition: all 0.3s;
+        box-shadow: var(--shadow-md);
+    }
+
+    .metric-card:hover {
+        transform: translateY(-4px);
+        background: var(--card-hover-bg);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--border-hover-color);
+    }
+
+    .metric-card.highlight {
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%);
+        color: white;
+        border: none;
+    }
+
+    .metric-card.highlight:hover {
+        background: linear-gradient(135deg, #fdd835 0%, #f9a825 100%);
+        box-shadow: 0 6px 12px rgba(251, 192, 45, 0.5);
+    }
+
+    .metric-icon {
+        font-size: 42px;
+    }
+
+    .metric-icon i {
+        font-size: 42px;
+        color: #fbc02d;
+    }
+
+    .metric-card.highlight .metric-icon i {
+        color: white;
+    }
+
+    .metric-content {
+        flex: 1;
+    }
+
+    .metric-label {
+        font-size: 13px;
+        opacity: 0.8;
+        margin-bottom: 5px;
+        color: var(--text-primary);
+    }
+
+    .metric-card.highlight .metric-label {
+        opacity: 0.95;
+        color: white;
+    }
+
+    .metric-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .metric-card.highlight .metric-value {
+        color: white;
+    }
+
+    .chart-section {
+        background: var(--card-bg);
+        padding: 30px;
+        border-radius: 12px;
+        margin-bottom: 30px;
+        border: 2px solid var(--border-color);
+        box-shadow: var(--shadow-md);
+    }
+
+    .chart-section h4 {
+        margin-top: 0;
+        margin-bottom: 25px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .chart-section h4 i {
+        color: #fbc02d;
+        font-size: 22px;
+    }
+
+    .chart-container {
+        min-height: 300px;
+    }
+
+    .pie-chart {
+        width: 300px;
+        height: 300px;
+        border-radius: 50%;
+        margin: 0 auto 30px;
+        position: relative;
+        background: conic-gradient(
+            from 0deg,
+            var(--positive-color) 0deg,
+            var(--positive-color) calc(var(--positive-percent) * 3.6deg),
+            var(--neutral-color) calc(var(--positive-percent) * 3.6deg),
+            var(--neutral-color) calc((var(--positive-percent) + var(--neutral-percent)) * 3.6deg),
+            var(--negative-color) calc((var(--positive-percent) + var(--neutral-percent)) * 3.6deg)
+        );
+    }
+
+    .legend {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px;
+        background: var(--legend-bg);
+        border-radius: 8px;
+        transition: background 0.3s;
+    }
+
+    .legend-item:hover {
+        background: var(--card-hover-bg);
+    }
+
+    .legend-color {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+    }
+
+    .legend-label {
+        flex: 1;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .legend-value {
+        font-weight: 700;
+        color: var(--text-secondary);
+    }
+
+    .bar-chart {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .bar-item {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: 15px;
+        align-items: center;
+    }
+
+    .bar-label {
+        font-weight: 600;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .bar-label i {
+        color: #fbc02d;
+        font-size: 14px;
+    }
+
+    .bar-container {
+        height: 40px;
+        background: var(--bar-bg);
+        border-radius: 8px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #fbc02d 0%, #f57f17 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 12px;
+        transition: width 0.5s ease;
+    }
+
+    .bar-count {
+        color: white;
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .line-chart {
+        position: relative;
+        height: 300px;
+        border-left: 2px solid var(--border-color);
+        border-bottom: 2px solid var(--border-color);
+        margin: 20px;
+    }
+
+    .data-point {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background: #fbc02d;
+        border-radius: 50%;
+        transform: translate(-50%, 50%);
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .data-point:hover {
+        width: 16px;
+        height: 16px;
+        background: #f57f17;
+    }
+
+    .dark-theme .data-point:hover {
+        background: #fdd835;
+    }
+
+    .data-point:hover .point-label {
+        display: block;
+    }
+
+    .point-label {
+        display: none;
+        position: absolute;
+        top: -30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--tooltip-bg);
+        color: var(--tooltip-text);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .chart-info {
+        text-align: center;
+        margin-top: 20px;
+        color: var(--text-secondary);
+    }
+
+    .missed-days {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .missed-day {
+        padding: 8px 16px;
+        background: #ffebee;
+        color: #c62828;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .missed-day i {
+        font-size: 12px;
+    }
+
+    .dark-theme .missed-day {
+        background: #4a1f1f;
+        color: #ff8a80;
+    }
+
+    .missed-more {
+        padding: 8px 16px;
+        background: var(--filter-bg);
+        color: var(--text-secondary);
+        border-radius: 20px;
+        font-size: 14px;
+        font-style: italic;
+    }
+
+    .no-data {
+        text-align: center;
+        color: var(--text-tertiary);
+        padding: 40px;
+        font-style: italic;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 60px;
+        font-size: 18px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .btn-primary {
+        background: #fbc02d;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #f9a825;
+        box-shadow: 0 4px 8px rgba(251, 192, 45, 0.4);
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #545b62;
+        box-shadow: 0 4px 8px rgba(108, 117, 125, 0.3);
+    }
+
+    .form-control {
+        padding: 10px;
+        border: 1px solid var(--input-border);
+        border-radius: 6px;
+        width: 100%;
+        background: var(--input-bg);
+        color: var(--text-primary);
+        transition: border-color 0.3s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #fbc02d;
+    }
+
+    :root {
+        /* Light theme variables */
+        --page-bg: #f5f5f5;
+        --text-primary: #212529;
+        --text-secondary: #6c757d;
+        --text-tertiary: #adb5bd;
+        --card-bg: #ffffff;
+        --card-hover-bg: #f8f9fa;
+        --border-color: #e0e0e0;
+        --border-hover-color: #fbc02d;
+        --filter-bg: #ffffff;
+        --input-bg: #ffffff;
+        --input-border: #ced4da;
+        --legend-bg: #f8f9fa;
+        --bar-bg: #e9ecef;
+        --tooltip-bg: #212529;
+        --tooltip-text: #ffffff;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .dark-theme {
+        /* Dark theme variables */
+        --page-bg: #1a1a1a;
+        --text-primary: #e0e0e0;
+        --text-secondary: #b0b0b0;
+        --text-tertiary: #808080;
+        --card-bg: #2a2a2a;
+        --card-hover-bg: #333333;
+        --border-color: #404040;
+        --border-hover-color: #fdd835;
+        --filter-bg: #2a2a2a;
+        --input-bg: #333333;
+        --input-border: #404040;
+        --legend-bg: #333333;
+        --bar-bg: #333333;
+        --tooltip-bg: #f5f5f5;
+        --tooltip-text: #212529;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+    }
+</style>

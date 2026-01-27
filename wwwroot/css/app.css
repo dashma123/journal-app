@@ -1,0 +1,906 @@
+﻿/* Base Light Theme (Default) */
+body {
+    background: #f5f5f5;
+    color: #333;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark Theme */
+body.dark-theme {
+    background: #1a1a1a;
+    color: #e0e0e0;
+}
+
+/* Global text colors */
+body.dark-theme h1,
+body.dark-theme h2,
+body.dark-theme h3,
+body.dark-theme h4,
+body.dark-theme h5,
+body.dark-theme h6 {
+    color: #e0e0e0;
+}
+
+body.dark-theme p,
+body.dark-theme span,
+body.dark-theme label,
+body.dark-theme div {
+    color: #e0e0e0;
+}
+
+/* Links */
+body.dark-theme a {
+    color: #4da3ff;
+}
+
+body.dark-theme a:hover {
+    color: #6bb5ff;
+}
+
+/* All Cards/Sections */
+body.dark-theme .settings-section,
+body.dark-theme .calendar-header,
+body.dark-theme .calendar-grid,
+body.dark-theme .card,
+body.dark-theme .journal-card,
+body.dark-theme .entry-card {
+    background: #2d2d2d;
+    color: #e0e0e0;
+}
+
+/* Form Controls - All inputs, textareas, selects */
+body.dark-theme .form-control,
+body.dark-theme input,
+body.dark-theme textarea,
+body.dark-theme select {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark-theme .form-control:focus,
+body.dark-theme input:focus,
+body.dark-theme textarea:focus,
+body.dark-theme select:focus {
+    background: #333;
+    border-color: #0d6efd;
+    color: #e0e0e0;
+}
+
+body.dark-theme input::placeholder,
+body.dark-theme textarea::placeholder {
+    color: #888;
+}
+
+/* Buttons - keeping colors but adjusting for dark theme */
+body.dark-theme .btn {
+    color: white;
+}
+
+body.dark-theme .btn-primary {
+    background: #0d6efd;
+}
+
+body.dark-theme .btn-primary:hover {
+    background: #0b5ed7;
+}
+
+body.dark-theme .btn-secondary {
+    background: #495057;
+}
+
+body.dark-theme .btn-secondary:hover {
+    background: #3a3f44;
+}
+
+/* Special dialogs and forms */
+body.dark-theme .password-form,
+body.dark-theme .export-dialog,
+body.dark-theme .export-item {
+    background: #1a1a1a;
+    border-color: #444;
+}
+
+body.dark-theme .confirm-dialog {
+    background: #3a3a1a;
+    border-color: #665500;
+}
+
+/* Settings specific */
+body.dark-theme .settings-section h4 {
+    color: #e0e0e0;
+    border-bottom-color: #444;
+}
+
+body.dark-theme .setting-item {
+    border-bottom-color: #444;
+}
+
+body.dark-theme .setting-label strong {
+    color: #e0e0e0;
+}
+
+body.dark-theme .setting-label p {
+    color: #aaa;
+}
+
+body.dark-theme .export-label strong {
+    color: #e0e0e0;
+}
+
+body.dark-theme .export-label p {
+    color: #aaa;
+}
+
+/* Calendar specific */
+body.dark-theme .current-month {
+    color: #e0e0e0;
+}
+
+body.dark-theme .calendar-day-header {
+    color: #aaa;
+}
+
+body.dark-theme .calendar-day {
+    border-color: #444;
+    background: #1a1a1a;
+}
+
+body.dark-theme .calendar-day:hover {
+    background: #333;
+}
+
+body.dark-theme .calendar-day.has-entry {
+    background: #1a2a3a;
+    border-color: #0d6efd;
+}
+
+body.dark-theme .calendar-day.today {
+    background: #3a3a1a;
+    border-color: #ffc107;
+}
+
+body.dark-theme .day-number {
+    color: #e0e0e0;
+}
+
+body.dark-theme .entry-preview {
+    color: #aaa;
+}
+
+/* Navigation/Sidebar */
+body.dark-theme .sidebar,
+body.dark-theme .nav-menu,
+body.dark-theme .navbar {
+    background: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.dark-theme .nav-item {
+    color: #e0e0e0;
+}
+
+body.dark-theme .nav-item:hover {
+    background: #3a3a3a;
+}
+
+/* Tables */
+body.dark-theme table {
+    background: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.dark-theme table th {
+    background: #1a1a1a;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.dark-theme table td {
+    border-color: #444;
+}
+
+body.dark-theme table tr:hover {
+    background: #333;
+}
+
+/* Lists */
+body.dark-theme .list-group-item {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark-theme .list-group-item:hover {
+    background: #333;
+}
+
+/* Modals/Popups */
+body.dark-theme .modal-content,
+body.dark-theme .modal-header,
+body.dark-theme .modal-body,
+body.dark-theme .modal-footer {
+    background: #2d2d2d;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+/* Alerts/Messages */
+body.dark-theme .alert {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark-theme .alert-info {
+    background: #1a2a3a;
+    border-color: #0d6efd;
+}
+
+body.dark-theme .alert-success {
+    background: #1a3a2a;
+    border-color: #198754;
+}
+
+body.dark-theme .alert-warning {
+    background: #3a3a1a;
+    border-color: #ffc107;
+}
+
+body.dark-theme .alert-danger {
+    background: #3a1a1a;
+    border-color: #dc3545;
+}
+
+/* Messages in export/forms */
+body.dark-theme .info {
+    color: #4da3ff;
+}
+
+body.dark-theme .success {
+    color: #50c878;
+}
+
+body.dark-theme .error {
+    color: #ff6b6b;
+}
+
+/* Borders and dividers */
+body.dark-theme hr {
+    border-color: #444;
+}
+
+/* Scrollbar for dark theme (webkit browsers) */
+body.dark-theme::-webkit-scrollbar {
+    width: 12px;
+}
+
+body.dark-theme::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+body.dark-theme::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 6px;
+}
+
+body.dark-theme::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Blazor specific components */
+body.dark-theme .blazor-error-ui {
+    background: #3a1a1a;
+    color: #e0e0e0;
+}
+
+/* Date picker (if visible) */
+body.dark-theme input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+/* Ensure all custom components inherit theme */
+body.dark-theme * {
+    border-color: #444;
+}
+
+/* Keep light theme borders normal */
+body * {
+    border-color: #dee2e6;
+}
+
+/* Smooth transitions for theme changes */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* ============================================
+   SETTINGS PAGE STYLES
+   ============================================ */
+
+.settings-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.settings-page h3 {
+    font-size: 2rem;
+    margin-bottom: 2rem;
+    color: #333;
+}
+
+.settings-section {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.settings-section h4 {
+    font-size: 1.3rem;
+    margin-bottom: 1.5rem;
+    color: #444;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 0.5rem;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-label {
+    flex: 1;
+}
+
+.setting-label strong {
+    display: block;
+    font-size: 1.1rem;
+    margin-bottom: 0.3rem;
+    color: #333;
+}
+
+.setting-label p {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.setting-control {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Password Form */
+.password-form {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.password-form input {
+    margin-bottom: 1rem;
+}
+
+.password-form .error {
+    color: #dc3545;
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+}
+
+/* Export Options */
+.export-options {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.export-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.export-label {
+    flex: 1;
+}
+
+.export-label strong {
+    display: block;
+    font-size: 1rem;
+    margin-bottom: 0.3rem;
+    color: #333;
+}
+
+.export-label p {
+    color: #666;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.export-dialog {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.export-dialog h5 {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.date-range {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.date-range .form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.date-range label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #555;
+}
+
+.export-dialog .info {
+    color: #0d6efd;
+    margin: 1rem 0;
+}
+
+.export-dialog .success {
+    color: #198754;
+    margin: 1rem 0;
+}
+
+/* Danger Zone */
+.danger-zone {
+    border: 2px solid #dc3545;
+}
+
+.danger-zone h4 {
+    color: #dc3545;
+}
+
+.confirm-dialog {
+    background: #fff3cd;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+    border: 2px solid #ffc107;
+}
+
+.confirm-dialog p {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.confirm-dialog strong {
+    color: #dc3545;
+}
+
+/* Form Actions */
+.form-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+/* ============================================
+   CALENDAR VIEW STYLES
+   ============================================ */
+
+.calendar-view {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.calendar-view h3 {
+    font-size: 2rem;
+    margin-bottom: 2rem;
+    color: #333;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-nav {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.calendar-nav button {
+    padding: 0.6rem 1.2rem;
+    background: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: background 0.3s ease;
+}
+
+.calendar-nav button:hover {
+    background: #0b5ed7;
+}
+
+.current-month {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1rem;
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-day-header {
+    text-align: center;
+    font-weight: 600;
+    padding: 0.5rem;
+    color: #666;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+}
+
+.calendar-day {
+    aspect-ratio: 1;
+    padding: 0.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: white;
+}
+
+.calendar-day:hover {
+    background: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-day.has-entry {
+    background: #e7f3ff;
+    border-color: #0d6efd;
+}
+
+.calendar-day.has-entry:hover {
+    background: #d0e7ff;
+}
+
+.calendar-day.today {
+    border: 2px solid #0d6efd;
+    background: #fff8e1;
+}
+
+.calendar-day.today:hover {
+    background: #fff3cd;
+}
+
+.calendar-day.other-month {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.day-number {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #333;
+    margin-bottom: 0.3rem;
+}
+
+.entry-indicator {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    background: #0d6efd;
+    border-radius: 50%;
+}
+
+.calendar-day.has-entry .entry-preview {
+    font-size: 0.75rem;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: auto;
+}
+
+/* ============================================
+   BUTTONS (Shared)
+   ============================================ */
+
+.btn {
+    padding: 0.5rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: #0d6efd;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0b5ed7;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5c636a;
+}
+
+.btn-success {
+    background: #198754;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #157347;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #bb2d3b;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Form Controls (Shared) */
+.form-control {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+}
+
+/* ============================================
+   DARK THEME - SETTINGS
+   ============================================ */
+
+body.dark-theme .settings-page h3 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .settings-section {
+    background: #2d2d2d;
+}
+
+body.dark-theme .settings-section h4 {
+    color: #e0e0e0;
+    border-bottom-color: #444;
+}
+
+body.dark-theme .setting-item {
+    border-bottom-color: #444;
+}
+
+body.dark-theme .setting-label strong {
+    color: #e0e0e0;
+}
+
+body.dark-theme .setting-label p {
+    color: #aaa;
+}
+
+body.dark-theme .password-form,
+body.dark-theme .export-dialog,
+body.dark-theme .export-item {
+    background: #1a1a1a;
+}
+
+body.dark-theme .export-label strong {
+    color: #e0e0e0;
+}
+
+body.dark-theme .export-label p {
+    color: #aaa;
+}
+
+body.dark-theme .export-dialog h5 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .date-range label {
+    color: #aaa;
+}
+
+body.dark-theme .form-control {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark-theme .form-control:focus {
+    background: #333;
+    border-color: #0d6efd;
+}
+
+body.dark-theme input::placeholder,
+body.dark-theme textarea::placeholder {
+    color: #888;
+}
+
+body.dark-theme .confirm-dialog {
+    background: #3a3a1a;
+    border-color: #665500;
+}
+
+body.dark-theme .confirm-dialog p {
+    color: #e0e0e0;
+}
+
+/* ============================================
+   DARK THEME - CALENDAR
+   ============================================ */
+
+body.dark-theme .calendar-view h3 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .calendar-header,
+body.dark-theme .calendar-grid {
+    background: #2d2d2d;
+}
+
+body.dark-theme .current-month {
+    color: #e0e0e0;
+}
+
+body.dark-theme .calendar-day-header {
+    color: #aaa;
+}
+
+body.dark-theme .calendar-day {
+    border-color: #444;
+    background: #1a1a1a;
+}
+
+body.dark-theme .calendar-day:hover {
+    background: #333;
+}
+
+body.dark-theme .calendar-day.has-entry {
+    background: #1a2a3a;
+    border-color: #0d6efd;
+}
+
+body.dark-theme .calendar-day.has-entry:hover {
+    background: #1f3548;
+}
+
+body.dark-theme .calendar-day.today {
+    background: #3a3a1a;
+    border-color: #ffc107;
+}
+
+body.dark-theme .calendar-day.today:hover {
+    background: #4a4a2a;
+}
+
+body.dark-theme .day-number {
+    color: #e0e0e0;
+}
+
+body.dark-theme .entry-preview {
+    color: #aaa;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+
+@media (max-width: 768px) {
+    .settings-page,
+    .calendar-view {
+        padding: 1rem;
+    }
+
+    .settings-page h3,
+    .calendar-view h3 {
+        font-size: 1.5rem;
+    }
+
+    .setting-item,
+    .export-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .date-range {
+        grid-template-columns: 1fr;
+    }
+
+    .calendar-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .calendar-grid {
+        gap: 0.5rem;
+        padding: 1rem;
+    }
+
+    .calendar-day {
+        padding: 0.3rem;
+    }
+
+    .day-number {
+        font-size: 0.9rem;
+    }
+
+    .entry-preview {
+        display: none;
+    }
+
+    .entry-indicator {
+        bottom: 4px;
+        right: 4px;
+        width: 6px;
+        height: 6px;
+    }
+}

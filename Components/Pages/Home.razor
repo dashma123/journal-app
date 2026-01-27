@@ -1,0 +1,488 @@
+﻿@page "/"
+@using JournalApp.Services
+@inject JournalService JournalService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+
+<!--home page container -->
+<div class="home-page">
+    <div class="hero">
+        <h1><i class="bi bi-journal-bookmark-fill"></i> Welcome to Your Journal</h1>
+        <p class="tagline">Capture your thoughts, track your moods, and reflect on your journey</p>
+    </div>
+
+    <div class="quick-stats">
+        <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-fire"></i></div>
+            <div class="stat-value">@streakInfo.CurrentStreak</div>
+            <div class="stat-label">Day Streak</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-pencil-fill"></i></div>
+            <div class="stat-value">@streakInfo.TotalEntries</div>
+            <div class="stat-label">Total Entries</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-trophy-fill"></i></div>
+            <div class="stat-value">@streakInfo.LongestStreak</div>
+            <div class="stat-label">Best Streak</div>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <div class="action-card primary" @onclick="CreateEntry">
+            <div class="action-icon"><i class="bi bi-pencil-square"></i></div>
+            <h3>Write Today's Entry</h3>
+            <p>@(hasTodayEntry ? "Edit your entry for today" : "Start your daily reflection")</p>
+        </div>
+
+        <div class="action-card" @onclick="ViewEntries">
+            <div class="action-icon"><i class="bi bi-journal-text"></i></div>
+            <h3>Browse Entries</h3>
+            <p>Read and manage your past entries</p>
+        </div>
+
+        <div class="action-card" @onclick="ViewCalendar">
+            <div class="action-icon"><i class="bi bi-calendar3"></i></div>
+            <h3>Calendar View</h3>
+            <p>See your journaling journey at a glance</p>
+        </div>
+
+        <div class="action-card" @onclick="ViewDashboard">
+            <div class="action-icon"><i class="bi bi-graph-up-arrow"></i></div>
+            <h3>View Analytics</h3>
+            <p>Explore insights about your moods and habits</p>
+        </div>
+    </div>
+    @* Show recent entries only if available *@
+    @if (recentEntries.Any())
+    {
+        <div class="recent-section">
+            <h3><i class="bi bi-clock-history"></i> Recent Entries</h3>
+            <div class="recent-entries">
+                @foreach (var entry in recentEntries)
+                {
+                    <div class="recent-card" @onclick="() => EditEntry(entry.EntryDate)">
+                        <div class="recent-date">
+                            <i class="bi bi-calendar-event"></i>
+                            <span>@entry.EntryDate.ToString("MMM dd")</span>
+                        </div>
+                        <div class="recent-content">
+                            <h4>@entry.Title</h4>
+                            <p>@(entry.Content.Length > 80 ? entry.Content.Substring(0, 80) + "..." : entry.Content)</p>
+                            <span class="recent-mood">@GetMoodEmoji(entry.PrimaryMood) @entry.PrimaryMood</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    
+    <!-- Helpful journaling tips section -->
+    <div class="tips-section">
+        <h3><i class="bi bi-lightbulb-fill"></i> Journaling Tips</h3>
+        <div class="tips">
+            <div class="tip">
+                <i class="bi bi-check-circle-fill tip-icon"></i>
+                <div class="tip-content">
+                    <strong>Be Consistent:</strong> Try to write every day, even if it's just a few sentences.
+                </div>
+            </div>
+            <div class="tip">
+                <i class="bi bi-heart-fill tip-icon"></i>
+                <div class="tip-content">
+                    <strong>Be Honest:</strong> Your journal is a safe space for your true thoughts and feelings.
+                </div>
+            </div>
+            <div class="tip">
+                <i class="bi bi-arrow-repeat tip-icon"></i>
+                <div class="tip-content">
+                    <strong>Reflect:</strong> Use your journal to track patterns and growth over time.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<JournalEntry> recentEntries = new();
+    private StreakInfo streakInfo = new();
+    private bool hasTodayEntry = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        //load Bootstrap Icons if not already included
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            if (!document.getElementById('bootstrap-icons')) {
+                const link = document.createElement('link');
+                link.id = 'bootstrap-icons';
+                link.rel = 'stylesheet';
+                link.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css';
+                document.head.appendChild(link);
+            }
+        ");
+
+        var allEntries = await JournalService.GetAllEntriesAsync();
+        recentEntries = allEntries.Take(3).ToList();
+        streakInfo = await JournalService.GetStreakInfoAsync();
+        hasTodayEntry = await JournalService.HasEntryForDateAsync(DateTime.Today);
+    }
+
+    private void CreateEntry()
+    {
+        NavigationManager.NavigateTo("/entry");
+    }
+
+    private void ViewEntries()
+    {
+        NavigationManager.NavigateTo("/journal");
+    }
+
+    private void ViewCalendar()
+    {
+        NavigationManager.NavigateTo("/calendar");
+    }
+
+    private void ViewDashboard()
+    {
+        NavigationManager.NavigateTo("/dashboard");
+    }
+
+    private void EditEntry(DateTime date)
+    {
+        NavigationManager.NavigateTo($"/entry/{date:yyyy-MM-dd}");
+    }
+
+    private string GetMoodEmoji(string mood)
+    {
+        return mood switch
+        {
+            "Happy" => "😊", "Excited" => "🤩", "Relaxed" => "😌", "Grateful" => "🙏", "Confident" => "💪",
+            "Calm" => "😐", "Thoughtful" => "🤔", "Curious" => "🧐", "Nostalgic" => "🥹", "Bored" => "😑",
+            "Sad" => "😢", "Angry" => "😠", "Stressed" => "😰", "Lonely" => "😔", "Anxious" => "😟",
+            _ => "📝"
+        };
+    }
+}
+
+<style>
+    .home-page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: var(--page-bg);
+        color: var(--text-primary);
+    }
+
+    .hero {
+        text-align: center;
+        padding: 60px 20px;
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%);
+        border-radius: 20px;
+        color: white;
+        margin-bottom: 40px;
+        box-shadow: 0 8px 20px rgba(251, 192, 45, 0.4);
+    }
+
+    .hero h1 {
+        margin: 0 0 15px 0;
+        font-size: 48px;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+    }
+
+    .hero h1 i {
+        font-size: 50px;
+    }
+
+    .tagline {
+        font-size: 20px;
+        opacity: 0.95;
+        margin: 0;
+        color: white;
+    }
+
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 40px;
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        padding: 30px;
+        border-radius: 16px;
+        text-align: center;
+        border: 2px solid var(--border-color);
+        transition: all 0.3s;
+        box-shadow: var(--shadow-md);
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        background: var(--card-hover-bg);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--border-hover-color);
+    }
+
+    .stat-icon {
+        font-size: 42px;
+        margin-bottom: 10px;
+        color: #fbc02d;
+    }
+
+    .stat-icon i {
+        font-size: 42px;
+    }
+
+    .stat-value {
+        font-size: 36px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 5px;
+    }
+
+    .stat-label {
+        color: var(--text-secondary);
+        font-size: 14px;
+    }
+
+    .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 50px;
+    }
+
+    .action-card {
+        background: var(--card-bg);
+        padding: 30px;
+        border-radius: 16px;
+        border: 2px solid var(--border-color);
+        cursor: pointer;
+        transition: all 0.3s;
+        text-align: center;
+        box-shadow: var(--shadow-md);
+    }
+
+    .action-card:hover {
+        transform: translateY(-5px);
+        background: var(--card-hover-bg);
+        box-shadow: var(--shadow-xl);
+        border-color: var(--border-hover-color);
+    }
+
+    .action-card.primary {
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 12px rgba(251, 192, 45, 0.3);
+    }
+
+    .action-card.primary:hover {
+        background: linear-gradient(135deg, #fdd835 0%, #f9a825 100%);
+        box-shadow: 0 8px 20px rgba(251, 192, 45, 0.5);
+    }
+
+    .action-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+
+    .action-icon i {
+        font-size: 48px;
+    }
+
+    .action-card h3 {
+        margin: 0 0 10px 0;
+        font-size: 20px;
+        color: var(--text-primary);
+    }
+
+    .action-card.primary h3 {
+        color: white;
+    }
+
+    .action-card p {
+        margin: 0;
+        opacity: 0.8;
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+
+    .action-card.primary p {
+        color: white;
+    }
+
+    .recent-section {
+        margin-bottom: 50px;
+    }
+
+    .recent-section h3 {
+        margin-bottom: 25px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .recent-section h3 i {
+        color: #fbc02d;
+        font-size: 24px;
+    }
+
+    .recent-entries {
+        display: grid;
+        gap: 20px;
+    }
+
+    .recent-card {
+        display: flex;
+        gap: 20px;
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 12px;
+        border: 2px solid var(--border-color);
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .recent-card:hover {
+        background: var(--card-hover-bg);
+        border-color: var(--border-hover-color);
+        transform: translateX(5px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .recent-date {
+        flex-shrink: 0;
+        width: 60px;
+        height: 60px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: var(--recent-date-bg);
+        border-radius: 12px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        transition: all 0.3s;
+    }
+
+    .recent-date i {
+        font-size: 20px;
+        margin-bottom: 2px;
+    }
+
+    .recent-date span {
+        font-size: 11px;
+    }
+
+    .recent-card:hover .recent-date {
+        background: var(--border-hover-color);
+        color: white;
+    }
+
+    .recent-content {
+        flex: 1;
+    }
+
+    .recent-content h4 {
+        margin: 0 0 8px 0;
+        color: var(--text-primary);
+    }
+
+    .recent-content p {
+        margin: 0 0 10px 0;
+        color: var(--text-secondary);
+        line-height: 1.5;
+    }
+
+    .recent-mood {
+        display: inline-block;
+        padding: 4px 12px;
+        background: #fff9e6;
+        color: #f57f17;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .dark-theme .recent-mood {
+        background: #3a3a2d;
+        color: #fdd835;
+    }
+
+    .tips-section {
+        background: var(--tips-bg);
+        padding: 40px;
+        border-radius: 16px;
+        border: 2px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .tips-section h3 {
+        margin-top: 0;
+        margin-bottom: 25px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .tips-section h3 i {
+        color: #fbc02d;
+        font-size: 24px;
+    }
+
+    .tips {
+        display: grid;
+        gap: 15px;
+    }
+
+    .tip {
+        padding: 15px;
+        background: var(--card-bg);
+        border-radius: 8px;
+        border-left: 4px solid #fbc02d;
+        color: var(--text-primary);
+        transition: all 0.3s;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .tip:hover {
+        background: var(--card-hover-bg);
+        transform: translateX(5px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .tip-icon {
+        font-size: 20px;
+        color: #fbc02d;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .tip-content {
+        flex: 1;
+    }
+
+    .tip strong {
+        color: #f9a825;
+    }
+
+    .dark-theme .tip strong {
+        color: #fdd835;
+    }
+    
+</style>

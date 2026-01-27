@@ -1,0 +1,391 @@
+@page "/settings"
+@using JournalApp.Models
+@using JournalApp.Services
+@inject DatabaseService DatabaseService
+@inject PdfExportService PdfExportService
+@inject JournalService JournalService
+@inject IJSRuntime JSRuntime
+
+
+<div class="settings-page">
+    <h3> Settings</h3>
+
+    <!-- Theme Settings -->
+    <div class="settings-section">
+        <h4>Appearance</h4>
+        <div class="setting-item">
+            <div class="setting-label">
+                <strong>Theme</strong>
+                <p>Choose your preferred color scheme</p>
+            </div>
+            <div class="setting-control">
+                <select class="form-control" value="@selectedTheme" @onchange="OnThemeChanged">
+                    <option value="Light"><i class="bi bi-sun-fill"></i> Light</option>
+                    <option value="Dark"><i class="bi bi-moon-fill"></i> Dark</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Settings -->
+    <div class="settings-section">
+        <h4> Security & Privacy</h4>
+        @if (!settings.IsPasswordEnabled)
+        {
+            <div class="setting-item">
+                <div class="setting-label">
+                    <strong>Password Protection</strong>
+                    <p>Protect your journal with a password</p>
+                </div>
+                <div class="setting-control">
+                    <button class="btn btn-primary" @onclick="ShowPasswordSetup">Enable Password</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="setting-item">
+                <div class="setting-label">
+                    <strong>Password Protection</strong>
+                    <p>Your journal is password protected</p>
+                </div>
+                <div class="setting-control">
+                    <button class="btn btn-secondary" @onclick="ShowChangePassword">Change Password</button>
+                    <button class="btn btn-danger" @onclick="DisablePassword">Disable Password</button>
+                </div>
+            </div>
+        }
+
+        @if (showPasswordForm)
+        {
+            <div class="password-form">
+                <input type="password" @bind="newPassword" placeholder="New Password" class="form-control" />
+                <input type="password" @bind="confirmPassword" placeholder="Confirm Password" class="form-control" />
+                @if (!string.IsNullOrEmpty(passwordError))
+                {
+                    <p class="error">@passwordError</p>
+                }
+                <div class="form-actions">
+                    <button class="btn btn-success" @onclick="SavePassword">Save Password</button>
+                    <button class="btn btn-secondary" @onclick="CancelPassword">Cancel</button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Export Settings -->
+    <div class="settings-section">
+        <h4> Export Journal</h4>
+        <div class="export-options">
+            <div class="export-item">
+                <div class="export-label">
+                    <strong>Export as PDF</strong>
+                    <p>Download your journal entries as a PDF document</p>
+                </div>
+                <button class="btn btn-primary" @onclick="ShowExportDialog">Export to PDF</button>
+            </div>
+
+            <div class="export-item">
+                <div class="export-label">
+                    <strong>Export as Markdown</strong>
+                    <p>Download your journal entries in Markdown format</p>
+                </div>
+                <button class="btn btn-primary" @onclick="ExportMarkdown">Export Markdown</button>
+            </div>
+        </div>
+
+        @if (showExportDialog)
+        {
+            <div class="export-dialog">
+                <h5>Select Date Range</h5>
+                <div class="date-range">
+                    <div class="form-group">
+                        <label>Start Date</label>
+                        <InputDate @bind-Value="exportStartDate" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label>End Date</label>
+                        <InputDate @bind-Value="exportEndDate" class="form-control" />
+                    </div>
+                </div>
+
+                @if (isExporting)
+                {
+                    <p class="info">Exporting... Please wait.</p>
+                }
+                @if (!string.IsNullOrEmpty(exportMessage))
+                {
+                    <p class="success">@exportMessage</p>
+                }
+
+                <div class="form-actions">
+                    <button class="btn btn-success" @onclick="ExportPdf" disabled="@isExporting">Generate PDF</button>
+                    <button class="btn btn-secondary" @onclick="CloseExportDialog">Cancel</button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Data Management -->
+    <div class="settings-section">
+        <div class="setting-item">
+            <div class="setting-label">
+                <strong>Clear All Data</strong>
+                <p>Delete all journal entries permanently. This action cannot be undone!</p>
+            </div>
+            <div class="setting-control">
+                <button class="btn btn-danger" @onclick="ShowClearDataConfirm">Clear All Data</button>
+            </div>
+        </div>
+
+        @if (showClearConfirm)
+        {
+            <div class="confirm-dialog">
+                <p><strong>Are you absolutely sure?</strong></p>
+                <p>This will permanently delete all your journal entries. Type "DELETE" to confirm:</p>
+                <input type="text" @bind="confirmText" class="form-control" placeholder="Type DELETE" />
+                <div class="form-actions">
+                    <button class="btn btn-danger" @onclick="ClearAllData" disabled="@(confirmText != "DELETE")">
+                        Yes, Delete Everything
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CancelClearData">Cancel</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private UserSettings settings = new();
+    private string selectedTheme = "Light";
+    
+    // Password management
+    private bool showPasswordForm = false;
+    private string newPassword = string.Empty;
+    private string confirmPassword = string.Empty;
+    private string passwordError = string.Empty;
+
+    // Export
+    private bool showExportDialog = false;
+    private DateTime? exportStartDate = DateTime.Today;
+    private DateTime? exportEndDate = DateTime.Today;
+    private bool isExporting = false;
+    private string exportMessage = string.Empty;
+
+    // Clear data
+    private bool showClearConfirm = false;
+    private string confirmText = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+        if (!document.getElementById('bootstrap-icons')) {
+            const link = document.createElement('link');
+            link.id = 'bootstrap-icons';
+            link.rel = 'stylesheet';
+            link.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css';
+            document.head.appendChild(link);
+        }
+    ");
+
+        settings = await DatabaseService.GetSettingsAsync();
+    
+        // Force Light theme by default
+        settings.Theme = "Light";
+        await DatabaseService.UpdateSettingsAsync(settings);
+    
+        selectedTheme = "Light";
+        await ApplyThemeToPage();
+    }
+
+    private async Task OnThemeChanged(ChangeEventArgs e)
+    {
+        selectedTheme = e.Value?.ToString() ?? "Light";
+        settings.Theme = selectedTheme;
+        await DatabaseService.UpdateSettingsAsync(settings);
+        await ApplyThemeToPage();
+    }
+
+    private async Task ApplyThemeToPage()
+    {
+        var isDark = selectedTheme == "Dark";
+        await JSRuntime.InvokeVoidAsync("eval", $@"
+        if ({isDark.ToString().ToLower()}) {{
+            document.body.classList.add('dark-theme');
+            document.documentElement.classList.add('dark-theme');
+        }} else {{
+            document.body.classList.remove('dark-theme');
+            document.documentElement.classList.remove('dark-theme');
+        }}
+    ");
+    }
+
+    // Password Methods
+    private void ShowPasswordSetup() => showPasswordForm = true;
+    private void ShowChangePassword() => showPasswordForm = true;
+    private void CancelPassword()
+    {
+        showPasswordForm = false;
+        newPassword = string.Empty;
+        confirmPassword = string.Empty;
+        passwordError = string.Empty;
+    }
+
+    private async Task SavePassword()
+    {
+        if (string.IsNullOrWhiteSpace(newPassword))
+        {
+            passwordError = "Password cannot be empty";
+            return;
+        }
+        if (newPassword != confirmPassword)
+        {
+            passwordError = "Passwords do not match";
+            return;
+        }
+        if (newPassword.Length < 4)
+        {
+            passwordError = "Password must be at least 4 characters";
+            return;
+        }
+
+        settings.PasswordHash = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(newPassword));
+        settings.IsPasswordEnabled = true;
+        await DatabaseService.UpdateSettingsAsync(settings);
+
+        CancelPassword();
+    }
+
+    private async Task DisablePassword()
+    {
+        settings.IsPasswordEnabled = false;
+        settings.PasswordHash = string.Empty;
+        await DatabaseService.UpdateSettingsAsync(settings);
+    }
+
+    // Export Methods
+    private void ShowExportDialog()
+    {
+        showExportDialog = true;
+        exportMessage = string.Empty;
+        exportStartDate = DateTime.Today;
+        exportEndDate = DateTime.Today;
+    }
+
+    private void CloseExportDialog()
+    {
+        showExportDialog = false;
+        exportMessage = string.Empty;
+    }
+
+    private async Task ExportPdf()
+    {
+        isExporting = true;
+        exportMessage = string.Empty;
+
+        try
+        {
+            var entries = await JournalService.FilterAsync(exportStartDate, exportEndDate);
+
+            if (!entries.Any())
+            {
+                exportMessage = "No entries found for the selected date range.";
+                return;
+            }
+
+            // Export each entry as a separate PDF
+            var exportedFiles = new List<string>();
+            foreach (var entry in entries)
+            {
+                var filePath = await PdfExportService.ExportToPdfAsync(entry);
+                exportedFiles.Add(filePath);
+            }
+
+            exportMessage = $"Successfully exported {exportedFiles.Count} entries to {FileSystem.AppDataDirectory}";
+        }
+        catch (Exception ex)
+        {
+            exportMessage = $"Export failed: {ex.Message}";
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private async Task ExportMarkdown()
+    {
+        try
+        {
+            var markdown = await JournalService.ExportToMarkdownAsync();
+            var fileName = $"Journal_Export_{DateTime.Now:yyyyMMdd_HHmmss}.md";
+            var filePath = Path.Combine(FileSystem.AppDataDirectory, fileName);
+
+            await File.WriteAllTextAsync(filePath, markdown);
+
+            await JSRuntime.InvokeVoidAsync("alert", $"Markdown exported successfully! Saved to: {filePath}");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Export failed: {ex.Message}");
+        }
+    }
+
+    // Clear Data Methods
+    private void ShowClearDataConfirm()
+    {
+        showClearConfirm = true;
+        confirmText = string.Empty;
+    }
+
+    private void CancelClearData()
+    {
+        showClearConfirm = false;
+        confirmText = string.Empty;
+    }
+
+    private async Task ClearAllData()
+    {
+        if (confirmText == "DELETE")
+        {
+            var entries = await JournalService.GetAllEntriesAsync();
+            foreach (var entry in entries)
+            {
+                await JournalService.DeleteEntryAsync(entry.Id);
+            }
+
+            showClearConfirm = false;
+            confirmText = string.Empty;
+
+            await JSRuntime.InvokeVoidAsync("alert", "All data has been cleared.");
+        }
+    }
+}
+
+<style>
+    .btn-primary {
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%) !important;
+        color: white !important;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #fdd835 0%, #f9a825 100%) !important;
+        box-shadow: 0 4px 8px rgba(251, 192, 45, 0.4);
+    }
+
+    .dark-theme .btn-primary {
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%) !important;
+        color: white !important;
+    }
+
+    .dark-theme .btn-primary:hover {
+        background: linear-gradient(135deg, #fdd835 0%, #f9a825 100%) !important;
+        box-shadow: 0 4px 8px rgba(251, 192, 45, 0.4);
+    }
+</style>

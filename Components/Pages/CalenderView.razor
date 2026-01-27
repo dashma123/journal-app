@@ -1,0 +1,795 @@
+@page "/calendar"
+@using JournalApp.Models
+@using JournalApp.Services
+@inject JournalService JournalService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<div class="calendar-view">
+    <div class="header">
+        <h3><i class="bi bi-calendar3"></i> Calendar View</h3>
+    </div>
+
+    <!-- Date Jump Controls -->
+    <div class="date-jump-section">
+        <div class="jump-controls">
+            <div class="input-group">
+                <label><i class="bi bi-calendar-date"></i> Jump to Date</label>
+                <input type="date" @bind="jumpToDate" class="form-control" />
+            </div>
+            <button class="btn btn-primary" @onclick="JumpToDate">
+                <i class="bi bi-arrow-right-circle"></i> Go to Date
+            </button>
+            <button class="btn btn-secondary" @onclick="GoToToday">
+                <i class="bi bi-calendar-check"></i> Today
+            </button>
+        </div>
+    </div>
+
+    <!-- Calendar Navigation -->
+    <div class="calendar-controls">
+        <button class="btn btn-nav" @onclick="PreviousMonth">
+            <i class="bi bi-chevron-left"></i> Previous
+        </button>
+        <h4><i class="bi bi-calendar-month"></i> @currentDate.ToString("MMMM yyyy")</h4>
+        <button class="btn btn-nav" @onclick="NextMonth">
+            Next <i class="bi bi-chevron-right"></i>
+        </button>
+    </div>
+
+    <!-- Calendar Grid -->
+    <div class="calendar-grid">
+        <div class="day-header">Sun</div>
+        <div class="day-header">Mon</div>
+        <div class="day-header">Tue</div>
+        <div class="day-header">Wed</div>
+        <div class="day-header">Thu</div>
+        <div class="day-header">Fri</div>
+        <div class="day-header">Sat</div>
+
+        @foreach (var day in calendarDays)
+        {
+            <div class="day-cell @GetDayClass(day)" @onclick="() => SelectDay(day)">
+                <div class="day-number">@day.Date.Day</div>
+                @if (entriesByDate.ContainsKey(day.Date.Date))
+                {
+                    var entry = entriesByDate[day.Date];
+                    <div class="day-indicator @GetMoodClass(entry.Category)">
+                        @GetMoodEmoji(entry.PrimaryMood)
+                    </div>
+                    <div class="day-preview">@entry.Title</div>
+                }
+                else if (day.IsCurrentMonth && day.Date < DateTime.Today)
+                {
+                    <div class="day-empty">No entry</div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Entry Preview Panel -->
+    @if (selectedEntry != null)
+    {
+        <div class="entry-preview-overlay" @onclick="ClosePreview"></div>
+        <div class="entry-preview-panel">
+            <div class="preview-header">
+                <h4><i class="bi bi-journal-text"></i> @selectedEntry.Title</h4>
+                <button class="btn-close" @onclick="ClosePreview">×</button>
+            </div>
+            <p class="preview-date">
+                <i class="bi bi-calendar-event"></i> @selectedEntry.EntryDate.ToString("MMMM dd, yyyy")
+            </p>
+            <p class="preview-mood">
+                <strong><i class="bi bi-emoji-smile"></i> Mood:</strong> @GetMoodEmoji(selectedEntry.PrimaryMood) @selectedEntry.PrimaryMood
+                @if (!string.IsNullOrEmpty(selectedEntry.SecondaryMood1))
+                {
+                    <span>, @selectedEntry.SecondaryMood1</span>
+                }
+                @if (!string.IsNullOrEmpty(selectedEntry.SecondaryMood2))
+                {
+                    <span>, @selectedEntry.SecondaryMood2</span>
+                }
+            </p>
+            @if (selectedEntry.Tags.Any())
+            {
+                <div class="preview-tags">
+                    <i class="bi bi-tags"></i>
+                    @foreach (var tag in selectedEntry.Tags)
+                    {
+                        <span class="tag">@tag</span>
+                    }
+                </div>
+            }
+            <div class="preview-content">@selectedEntry.Content</div>
+            <div class="preview-actions">
+                <button class="btn btn-primary" @onclick="() => EditEntry(selectedEntry.EntryDate)">
+                    <i class="bi bi-pencil"></i> Edit
+                </button>
+                <button class="btn btn-danger" @onclick="() => DeleteEntry(selectedEntry.Id)">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    }
+
+    <!-- Streak Panel -->
+    <div class="streak-panel">
+        <div class="streak-item">
+            <div class="streak-icon"><i class="bi bi-fire"></i></div>
+            <div class="streak-info">
+                <div class="streak-label">Current Streak</div>
+                <div class="streak-value">@streakInfo.CurrentStreak days</div>
+            </div>
+        </div>
+        <div class="streak-item">
+            <div class="streak-icon"><i class="bi bi-trophy-fill"></i></div>
+            <div class="streak-info">
+                <div class="streak-label">Longest Streak</div>
+                <div class="streak-value">@streakInfo.LongestStreak days</div>
+            </div>
+        </div>
+        <div class="streak-item">
+            <div class="streak-icon"><i class="bi bi-pencil-fill"></i></div>
+            <div class="streak-info">
+                <div class="streak-label">Total Entries</div>
+                <div class="streak-value">@streakInfo.TotalEntries</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateTime currentDate = DateTime.Today;
+    private DateTime? jumpToDate = DateTime.Today;
+    private Dictionary<DateTime, JournalEntry> entriesByDate = new();
+    private List<CalendarDay> calendarDays = new();
+    private JournalEntry? selectedEntry = null;
+    private StreakInfo streakInfo = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", @"
+            if (!document.getElementById('bootstrap-icons')) {
+                const link = document.createElement('link');
+                link.id = 'bootstrap-icons';
+                link.rel = 'stylesheet';
+                link.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css';
+                document.head.appendChild(link);
+            }
+        ");
+        
+        await LoadCalendar();
+        await LoadStreakInfo();
+    }
+
+    private async Task LoadCalendar()
+    {
+        var entries = await JournalService.GetEntriesByMonthAsync(currentDate.Year, currentDate.Month);
+    
+        // Normalize dates to remove time component
+        entriesByDate = entries.ToDictionary(
+            kvp => kvp.Key.Date,
+            kvp => kvp.Value
+        );
+    
+        GenerateCalendarDays();
+    }
+    private async Task LoadStreakInfo()
+    {
+        streakInfo = await JournalService.GetStreakInfoAsync();
+    }
+
+    private void GenerateCalendarDays()
+    {
+        calendarDays.Clear();
+        var firstDay = new DateTime(currentDate.Year, currentDate.Month, 1);
+        var lastDay = firstDay.AddMonths(1).AddDays(-1);
+        var startDay = firstDay.AddDays(-(int)firstDay.DayOfWeek);
+        var endDay = lastDay.AddDays(6 - (int)lastDay.DayOfWeek);
+
+        for (var date = startDay; date <= endDay; date = date.AddDays(1))
+        {
+            calendarDays.Add(new CalendarDay
+            {
+                Date = date,
+                IsCurrentMonth = date.Month == currentDate.Month,
+                IsToday = date.Date == DateTime.Today
+            });
+        }
+    }
+
+    private async Task PreviousMonth()
+    {
+        currentDate = currentDate.AddMonths(-1);
+        await LoadCalendar();
+    }
+
+    private async Task NextMonth()
+    {
+        currentDate = currentDate.AddMonths(1);
+        await LoadCalendar();
+    }
+
+    private async Task JumpToDate()
+    {
+        if (jumpToDate.HasValue)
+        {
+            currentDate = jumpToDate.Value;
+            await LoadCalendar();
+        }
+    }
+
+    private async Task GoToToday()
+    {
+        currentDate = DateTime.Today;
+        jumpToDate = DateTime.Today;
+        await LoadCalendar();
+    }
+
+    private void SelectDay(CalendarDay day)
+    {
+        if (entriesByDate.ContainsKey(day.Date))
+            selectedEntry = entriesByDate[day.Date];
+        else if (day.IsCurrentMonth)
+            NavigationManager.NavigateTo($"/entry/{day.Date:yyyy-MM-dd}");
+    }
+
+    private void ClosePreview() => selectedEntry = null;
+
+    private void EditEntry(DateTime date) => NavigationManager.NavigateTo($"/entry/{date:yyyy-MM-dd}");
+
+    private async Task DeleteEntry(int id)
+    {
+        await JournalService.DeleteEntryAsync(id);
+        selectedEntry = null;
+        await LoadCalendar();
+        await LoadStreakInfo();
+    }
+
+    private string GetDayClass(CalendarDay day)
+    {
+        var classes = new List<string>();
+        if (!day.IsCurrentMonth) classes.Add("other-month");
+        if (day.IsToday) classes.Add("today");
+        if (entriesByDate.ContainsKey(day.Date)) classes.Add("has-entry");
+        return string.Join(" ", classes);
+    }
+
+    private string GetMoodClass(string category) => category.ToLower();
+
+    private string GetMoodEmoji(string mood) => mood switch
+    {
+        "Happy" => "😊", "Excited" => "🤩", "Relaxed" => "😌", "Grateful" => "🙏", "Confident" => "💪",
+        "Calm" => "😐", "Thoughtful" => "🤔", "Curious" => "🧐", "Nostalgic" => "🥹", "Bored" => "😑",
+        "Sad" => "😢", "Angry" => "😠", "Stressed" => "😰", "Lonely" => "😔", "Anxious" => "😟",
+        _ => "📝"
+    };
+
+    private class CalendarDay
+    {
+        public DateTime Date { get; set; }
+        public bool IsCurrentMonth { get; set; }
+        public bool IsToday { get; set; }
+    }
+}
+
+<style>
+    .calendar-view {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background: var(--page-bg);
+        color: var(--text-primary);
+    }
+
+    .header {
+        margin-bottom: 30px;
+    }
+
+    .header h3 {
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 28px;
+    }
+
+    .header h3 i {
+        color: #fbc02d;
+    }
+
+    /* Date Jump Section */
+    .date-jump-section {
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        border: 2px solid var(--border-color);
+        box-shadow: var(--shadow-md);
+    }
+
+    .jump-controls {
+        display: flex;
+        gap: 15px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .input-group {
+        flex: 1;
+        min-width: 250px;
+    }
+
+    .input-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .input-group label i {
+        color: #fbc02d;
+    }
+
+    .form-control {
+        padding: 12px;
+        border: 2px solid var(--input-border);
+        border-radius: 8px;
+        width: 100%;
+        background: var(--input-bg);
+        color: var(--text-primary);
+        font-size: 14px;
+        transition: all 0.3s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #fbc02d;
+        box-shadow: 0 0 0 3px rgba(251, 192, 45, 0.1);
+    }
+
+    /* Calendar Controls */
+    .calendar-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding: 20px;
+        background: var(--card-bg);
+        border-radius: 12px;
+        border: 2px solid var(--border-color);
+        box-shadow: var(--shadow-md);
+    }
+
+    .calendar-controls h4 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .calendar-controls h4 i {
+        color: #fbc02d;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #fdd835 0%, #f9a825 100%);
+        box-shadow: 0 4px 12px rgba(251, 192, 45, 0.4);
+        transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #5a6268;
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .btn-nav {
+        background: var(--card-bg);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+    }
+
+    .btn-nav:hover {
+        background: #fbc02d;
+        color: white;
+        border-color: #fbc02d;
+        transform: translateY(-2px);
+    }
+
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #c82333;
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+        transform: translateY(-2px);
+    }
+
+    /* Calendar Grid */
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 10px;
+        margin-bottom: 30px;
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 12px;
+        border: 2px solid var(--border-color);
+        box-shadow: var(--shadow-md);
+    }
+
+    .day-header {
+        text-align: center;
+        font-weight: 700;
+        padding: 15px;
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%);
+        color: white;
+        border-radius: 8px;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .day-cell {
+        min-height: 100px;
+        padding: 12px;
+        background: var(--card-bg);
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s;
+        position: relative;
+    }
+
+    .day-cell:hover {
+        background: var(--card-hover-bg);
+        border-color: #fbc02d;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(251, 192, 45, 0.2);
+    }
+
+    .day-cell.other-month {
+        opacity: 0.3;
+    }
+
+    .day-cell.today {
+        border-color: #fbc02d;
+        background: rgba(251, 192, 45, 0.1);
+        box-shadow: 0 0 0 2px rgba(251, 192, 45, 0.2);
+    }
+
+    .day-cell.has-entry {
+        background: linear-gradient(135deg, rgba(251, 192, 45, 0.15) 0%, rgba(245, 127, 23, 0.1) 100%);
+    }
+
+    .day-number {
+        font-weight: 700;
+        font-size: 16px;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .day-indicator {
+        font-size: 24px;
+        text-align: center;
+        margin: 8px 0;
+    }
+
+    .day-preview {
+        font-size: 12px;
+        color: var(--text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-top: 5px;
+        font-weight: 500;
+    }
+
+    .day-empty {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        text-align: center;
+        font-style: italic;
+        margin-top: 10px;
+    }
+
+    /* Entry Preview Panel */
+    .entry-preview-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: transparent;
+        z-index: 999;
+        cursor: pointer;
+    }
+
+
+
+    .entry-preview-panel {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 30px;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        max-width: 600px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        z-index: 1000;
+        border: 2px solid #ddd;
+        animation: slideUp 0.3s;
+    }
+
+    /* Light mode text */
+    .entry-preview-panel,
+    .entry-preview-panel *,
+    .preview-header h4,
+    .preview-date,
+    .preview-mood,
+    .preview-content {
+        color: #000000 !important;
+    }
+
+    /* Dark mode */
+    .dark-theme .entry-preview-panel {
+        background: #1a1a1a;
+        border: 2px solid #333;
+    }
+
+    .dark-theme .entry-preview-panel,
+    .dark-theme .entry-preview-panel *,
+    .dark-theme .preview-header h4,
+    .dark-theme .preview-date,
+    .dark-theme .preview-mood,
+    .dark-theme .preview-content {
+        color: #ffffff !important;
+    }
+    @@keyframes fadeIn {
+        from { opacity: 1; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translate(-50%, -40%);
+        }
+        to {
+            opacity: 1;
+            transform: translate(-50%, -50%);
+        }
+    }
+
+    .preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid var(--border-color);
+    }
+
+    .preview-header h4 {
+        margin: 0;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 22px;
+    }
+
+    .preview-header h4 i {
+        color: #fbc02d;
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 32px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        transition: all 0.3s;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+    }
+
+    .btn-close:hover {
+        background: rgba(255, 0, 0, 0.1);
+        color: #dc3545;
+        transform: rotate(90deg);
+    }
+
+    .preview-date {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .preview-date i {
+        color: #fbc02d;
+    }
+
+    .preview-mood {
+        margin-bottom: 15px;
+        padding: 12px;
+        background: var(--legend-bg);
+        border-radius: 8px;
+        font-size: 14px;
+    }
+
+    .preview-mood i {
+        color: #fbc02d;
+    }
+
+    .preview-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+        align-items: center;
+    }
+
+    .preview-tags i {
+        color: #fbc02d;
+    }
+
+    .tag {
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .preview-content {
+        margin-bottom: 20px;
+        line-height: 1.6;
+        color: var(--text-primary);
+        padding: 15px;
+        background: var(--legend-bg);
+        border-radius: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .preview-actions {
+        display: flex;
+        gap: 10px;
+        padding-top: 15px;
+        border-top: 2px solid var(--border-color);
+    }
+
+    /* Streak Panel */
+    .streak-panel {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-top: 30px;
+    }
+
+    .streak-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 20px;
+        background: var(--card-bg);
+        border-radius: 12px;
+        border: 2px solid var(--border-color);
+        box-shadow: var(--shadow-md);
+        transition: all 0.3s;
+    }
+
+    .streak-item:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+        border-color: #fbc02d;
+    }
+
+    .streak-icon {
+        font-size: 40px;
+    }
+
+    .streak-icon i {
+        font-size: 40px;
+        color: #fbc02d;
+    }
+
+    .streak-info {
+        flex: 1;
+    }
+
+    .streak-label {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+    }
+
+    .streak-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    /* Responsive Design */
+    @@media (max-width: 768px) {
+        .calendar-grid {
+            gap: 5px;
+            padding: 10px;
+        }
+
+        .day-cell {
+            min-height: 80px;
+            padding: 8px;
+        }
+
+        .day-header {
+            padding: 10px 5px;
+            font-size: 12px;
+        }
+
+        .entry-preview-panel {
+            padding: 20px;
+        }
+
+        .jump-controls {
+            flex-direction: column;
+        }
+
+        .input-group {
+            width: 100%;
+        }
+
+        .calendar-controls {
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .calendar-controls h4 {
+            order: -1;
+        }
+    }
+</style>

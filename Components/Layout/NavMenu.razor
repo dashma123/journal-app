@@ -1,0 +1,165 @@
+﻿<!-- Top navigation header-->
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">
+            JournalApp
+        </a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler"/>
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                Home
+            </NavLink>
+        </div>
+        
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="entry">
+                 New Entry
+            </NavLink>
+        </div>
+        
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="journal">
+                 My Entries
+            </NavLink>
+        </div>
+        
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="calendar">
+               Calendar
+            </NavLink>
+        </div>
+        
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="dashboard">
+                Dashboard
+            </NavLink>
+        </div>
+        
+        <div class="nav-divider"></div>
+        
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="settings">
+                 Settings
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+<style>
+    .top-row {
+        background: linear-gradient(135deg, #fbc02d 0%, #f57f17 100%);
+        box-shadow: 0 2px 8px rgba(251, 192, 45, 0.3);
+        border-bottom: none;
+    }
+
+    .navbar-brand {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: white !important;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s;
+    }
+
+    .navbar-brand:hover {
+        transform: scale(1.05);
+    }
+
+    .navbar-brand i {
+        font-size: 1.5rem;
+    }
+
+    .nav-scrollable {
+        background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+    }
+
+    .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 15px;
+        border-radius: 8px;
+        transition: all 0.3s;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.85);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .nav-link::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 3px;
+        background: #fbc02d;
+        transform: scaleY(0);
+        transition: transform 0.3s;
+    }
+
+    .nav-link:hover {
+        background: rgba(251, 192, 45, 0.15);
+        transform: translateX(5px);
+        color: #fbc02d;
+    }
+
+    .nav-link:hover::before {
+        transform: scaleY(1);
+    }
+
+    .nav-link.active {
+        background: linear-gradient(90deg, rgba(251, 192, 45, 0.2) 0%, rgba(251, 192, 45, 0.05) 100%);
+        color: #fbc02d;
+        font-weight: 700;
+        border-left: 3px solid #fbc02d;
+    }
+
+    .nav-link.active .icon {
+        color: #fbc02d;
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    .icon {
+        font-size: 1.2rem;
+        transition: all 0.3s;
+    }
+
+    .nav-link:hover .icon {
+        transform: scale(1.1);
+    }
+
+    .nav-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent 0%, #fbc02d 50%, transparent 100%);
+        margin: 15px 20px;
+        opacity: 0.3;
+    }
+
+    @@keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.6;
+        }
+    }
+
+    /* Mobile responsiveness */
+    @@media (max-width: 768px) {
+        .navbar-brand {
+            font-size: 1.1rem;
+        }
+        
+        .nav-link {
+            padding: 10px 12px;
+        }
+    }
+</style>

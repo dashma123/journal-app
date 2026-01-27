@@ -1,0 +1,888 @@
+@page "/entry"
+@page "/entry/{EntryId:int}"
+@using JournalApp.Models
+@using JournalApp.Services
+@inject JournalService JournalService
+@inject DatabaseService DatabaseService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+@if (showPasswordPrompt)
+{
+    <div class="password-overlay">
+        <div class="password-dialog">
+            <h3><i class="bi bi-lock-fill"></i> Enter Password</h3>
+            <p>This journal is password protected</p>
+            
+            <input type="password" 
+                   @bind="enteredPassword" 
+                   @onkeyup="HandlePasswordKeyPress"
+                   class="form-control" 
+                   placeholder="Enter your password"
+                   autofocus />
+            
+            @if (!string.IsNullOrEmpty(passwordError))
+            {
+                <p class="error-message">@passwordError</p>
+            }
+            
+            <div class="password-actions">
+                <button class="btn btn-primary" @onclick="VerifyPassword">
+                    <i class="bi bi-check-circle"></i> Unlock
+                </button>
+                <button class="btn btn-secondary" @onclick="CancelPasswordPrompt">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isAuthenticated)
+{
+    <div class="entry-form">
+        <h3>@(isEditMode ? "Edit Entry" : "New Entry")</h3>
+        <p class="date-display">@selectedDate.ToString("dddd, MMMM dd, yyyy")</p>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        <div class="form-group">
+            <label>Entry Date</label>
+            <input type="date" @bind="entryDate" @bind:format="yyyy-MM-dd" class="form-control" />
+        </div>
+
+        <div class="form-group">
+            <label>Title *</label>
+            <input type="text" @bind="entry.Title" class="form-control" placeholder="Give your entry a title..." />
+        </div>
+
+        <div class="form-group">
+            <label>Content *</label>
+            
+            <div class="editor-toolbar">
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatBold" title="Bold (Ctrl+B)">
+                    <strong>B</strong>
+                </button>
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatItalic" title="Italic (Ctrl+I)">
+                    <em>I</em>
+                </button>
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatUnderline" title="Underline (Ctrl+U)">
+                    <u>U</u>
+                </button>
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatStrike" title="Strikethrough">
+                    <s>S</s>
+                </button>
+                <span class="toolbar-divider"></span>
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatH1" title="Heading 1">
+                    H1
+                </button>
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatH2" title="Heading 2">
+                    H2
+                </button>
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatH3" title="Heading 3">
+                    H3
+                </button>
+                <span class="toolbar-divider"></span>
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatBullet" title="Bullet List">
+                    • List
+                </button>
+                <button type="button" class="toolbar-btn" @onclick="ApplyFormatNumbered" title="Numbered List">
+                    1. List
+                </button>
+            </div>
+
+            <div id="richTextEditor" 
+                 class="rich-text-editor" 
+                 contenteditable="true"
+                 @ref="editorRef"
+                 placeholder="Write your thoughts...">
+            </div>
+            
+            <small class="text-muted">Word count: @wordCount</small>
+        </div>
+
+        <div class="form-group">
+            <label>Primary Mood * <span class="emoji">@GetMoodEmoji(entry.PrimaryMood)</span></label>
+            <select @bind="entry.PrimaryMood" class="form-control">
+                <option value="">Select a mood</option>
+                <optgroup label="😊 Positive">
+                    @foreach (var mood in MoodConfig.MoodCategories["Positive"])
+                    {
+                        <option value="@mood">@mood</option>
+                    }
+                </optgroup>
+                <optgroup label="😐 Neutral">
+                    @foreach (var mood in MoodConfig.MoodCategories["Neutral"])
+                    {
+                        <option value="@mood">@mood</option>
+                    }
+                </optgroup>
+                <optgroup label="😢 Negative">
+                    @foreach (var mood in MoodConfig.MoodCategories["Negative"])
+                    {
+                        <option value="@mood">@mood</option>
+                    }
+                </optgroup>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Secondary Mood 1 (Optional) <span class="emoji">@GetMoodEmoji(entry.SecondaryMood1 ?? string.Empty)</span></label>
+                <select @bind="entry.SecondaryMood1" class="form-control">
+                    <option value="">None</option>
+                    @foreach (var mood in MoodConfig.AllMoods.Where(m => m != entry.PrimaryMood && m != entry.SecondaryMood2))
+                    {
+                        <option value="@mood">@mood</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Secondary Mood 2 (Optional) <span class="emoji">@GetMoodEmoji(entry.SecondaryMood2 ?? string.Empty)</span></label>
+                <select @bind="entry.SecondaryMood2" class="form-control">
+                    <option value="">None</option>
+                    @foreach (var mood in MoodConfig.AllMoods.Where(m => m != entry.PrimaryMood && m != entry.SecondaryMood1))
+                    {
+                        <option value="@mood">@mood</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Tags</label>
+            <input type="text" @bind="customTagInput" class="form-control" placeholder="Add custom tags (comma separated)..." @onkeyup="HandleTagInput" />
+            
+            <div class="tag-suggestions">
+                <small class="text-muted">Quick add:</small>
+                @foreach (var tag in TagConfig.PreBuiltTags.Take(15))
+                {
+                    <button type="button" class="tag-btn @(selectedTags.Contains(tag) ? "active" : "")" @onclick="() => ToggleTag(tag)">
+                        @tag
+                    </button>
+                }
+            </div>
+
+            @if (selectedTags.Any())
+            {
+                <div class="selected-tags">
+                    @foreach (var tag in selectedTags)
+                    {
+                        <span class="tag">
+                            @tag
+                            <button type="button" @onclick="() => RemoveTag(tag)">×</button>
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" @onclick="SaveEntry" disabled="@(!IsFormValid())">
+                <i class="bi bi-save"></i> Save Entry
+            </button>
+            @if (isEditMode)
+            {
+                <button class="btn btn-danger" @onclick="DeleteEntry">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            }
+            <button class="btn btn-secondary" @onclick="Cancel">
+                Cancel
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int? EntryId { get; set; }
+
+    private ElementReference editorRef;
+    private JournalEntry entry = new();
+    private bool isEditMode = false;
+    private DateTime selectedDate = DateTime.Today;
+    private DateTime entryDate = DateTime.Today;
+    private string customTagInput = string.Empty;
+    private HashSet<string> selectedTags = new();
+    private string errorMessage = string.Empty;
+    private int wordCount = 0;
+    private System.Threading.Timer? wordCountTimer;
+    
+    // Format button methods
+    private async Task ApplyFormatBold() => await ApplyFormat("bold");
+    private async Task ApplyFormatItalic() => await ApplyFormat("italic");
+    private async Task ApplyFormatUnderline() => await ApplyFormat("underline");
+    private async Task ApplyFormatStrike() => await ApplyFormat("strikeThrough");
+    private async Task ApplyFormatH1() => await ApplyFormat("formatBlock", "<h1>");
+    private async Task ApplyFormatH2() => await ApplyFormat("formatBlock", "<h2>");
+    private async Task ApplyFormatH3() => await ApplyFormat("formatBlock", "<h3>");
+    private async Task ApplyFormatBullet() => await ApplyFormat("insertUnorderedList");
+    private async Task ApplyFormatNumbered() => await ApplyFormat("insertOrderedList");
+
+    // Password protection
+    private bool showPasswordPrompt = false;
+    private bool isAuthenticated = false;
+    private string enteredPassword = string.Empty;
+    private string passwordError = string.Empty;
+    private UserSettings? settings;
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = await DatabaseService.GetSettingsAsync();
+        
+        if (settings.IsPasswordEnabled)
+        {
+            showPasswordPrompt = true;
+            isAuthenticated = false;
+        }
+        else
+        {
+            isAuthenticated = true;
+            await LoadEntry();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                if (!document.getElementById('bootstrap-icons')) {
+                    const link = document.createElement('link');
+                    link.id = 'bootstrap-icons';
+                    link.rel = 'stylesheet';
+                    link.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css';
+                    document.head.appendChild(link);
+                }
+                
+                window.applyFormatting = function(command, value) {
+                    const editor = document.getElementById('richTextEditor');
+                    if (!editor) return;
+                    
+                    // Ensure editor has focus
+                    editor.focus();
+                    
+                    // Special handling for list commands
+                    if (command === 'insertUnorderedList' || command === 'insertOrderedList') {
+                        const selection = window.getSelection();
+                        
+                        // If editor is empty, add a placeholder
+                        if (editor.innerHTML.trim() === '' || editor.innerText.trim() === '') {
+                            editor.innerHTML = '<p><br></p>';
+                            const range = document.createRange();
+                            range.setStart(editor.firstChild, 0);
+                            range.collapse(true);
+                            selection.removeAllRanges();
+                            selection.addRange(range);
+                        }
+                        
+                        // If no selection, select the current line
+                        if (selection.rangeCount === 0 || selection.isCollapsed) {
+                            const range = document.createRange();
+                            const node = selection.anchorNode || editor.firstChild;
+                            const element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+                            
+                            if (element && editor.contains(element)) {
+                                range.selectNodeContents(element);
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                            }
+                        }
+                    }
+                    
+                    // Execute the formatting command
+                    document.execCommand(command, false, value || null);
+                    editor.focus();
+                };
+                
+                window.getEditorContent = function() {
+                    const editor = document.getElementById('richTextEditor');
+                    return editor ? editor.innerHTML : '';
+                };
+                
+                window.setEditorContent = function(content) {
+                    const editor = document.getElementById('richTextEditor');
+                    if (editor) {
+                        editor.innerHTML = content || '';
+                    }
+                };
+                
+                window.getEditorText = function() {
+                    const editor = document.getElementById('richTextEditor');
+                    return editor ? editor.innerText : '';
+                };
+            ");
+
+            if (isAuthenticated && !string.IsNullOrEmpty(entry.Content))
+            {
+                await JSRuntime.InvokeVoidAsync("setEditorContent", entry.Content);
+            }
+            
+            // Start word count timer
+            wordCountTimer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(async () => await UpdateWordCount());
+            }, null, 500, 500);
+        }
+    }
+
+    private async Task LoadEntry()
+    {
+        if (EntryId.HasValue && EntryId.Value > 0)
+        {
+            var existingEntry = await JournalService.GetEntryByIdAsync(EntryId.Value);
+            if (existingEntry != null)
+            {
+                entry = existingEntry;
+                isEditMode = true;
+                selectedDate = entry.EntryDate;
+                entryDate = entry.EntryDate;
+                
+                var tags = entry.GetTags();
+                selectedTags = tags.ToHashSet();
+                
+                wordCount = entry.WordCount;
+            }
+        }
+        else
+        {
+            entry.EntryDate = selectedDate;
+            entryDate = selectedDate;
+            entry.Content = string.Empty;
+        }
+    }
+
+    private async Task VerifyPassword()
+    {
+        if (string.IsNullOrWhiteSpace(enteredPassword))
+        {
+            passwordError = "Please enter a password";
+            return;
+        }
+
+        var hashedInput = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(enteredPassword));
+        
+        if (hashedInput == settings?.PasswordHash)
+        {
+            isAuthenticated = true;
+            showPasswordPrompt = false;
+            passwordError = string.Empty;
+            await LoadEntry();
+        }
+        else
+        {
+            passwordError = "Incorrect password. Please try again.";
+            enteredPassword = string.Empty;
+        }
+    }
+
+    private void CancelPasswordPrompt()
+    {
+        NavigationManager.NavigateTo("/journal");
+    }
+
+    private async Task HandlePasswordKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await VerifyPassword();
+        }
+    }
+
+    private async Task ApplyFormat(string command, string? value = null)
+    {
+        await JSRuntime.InvokeVoidAsync("applyFormatting", command, value);
+        await UpdateWordCount();
+    }
+
+    private async Task UpdateWordCount()
+    {
+        try
+        {
+            var text = await JSRuntime.InvokeAsync<string>("getEditorText");
+            var newCount = string.IsNullOrWhiteSpace(text)
+                ? 0
+                : text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            
+            if (newCount != wordCount)
+            {
+                wordCount = newCount;
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private void HandleTagInput(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(customTagInput))
+        {
+            var tags = customTagInput.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var tag in tags)
+            {
+                var trimmedTag = tag.Trim();
+                if (!string.IsNullOrWhiteSpace(trimmedTag))
+                {
+                    selectedTags.Add(trimmedTag);
+                }
+            }
+            customTagInput = string.Empty;
+        }
+    }
+
+    private void ToggleTag(string tag)
+    {
+        if (selectedTags.Contains(tag))
+            selectedTags.Remove(tag);
+        else
+            selectedTags.Add(tag);
+    }
+
+    private void RemoveTag(string tag)
+    {
+        selectedTags.Remove(tag);
+    }
+
+    private async Task SaveEntry()
+    {
+        try
+        {
+            errorMessage = string.Empty;
+            
+            entry.EntryDate = entryDate;
+            entry.Content = await JSRuntime.InvokeAsync<string>("getEditorContent");
+            entry.WordCount = wordCount;
+            
+            entry.SetTags(selectedTags.ToList());
+            
+            if (isEditMode)
+            {
+                entry.UpdatedAt = DateTime.Now;
+            }
+            else
+            {
+                entry.CreatedAt = DateTime.Now;
+                entry.UpdatedAt = DateTime.Now;
+            }
+
+            await JournalService.SaveEntryAsync(entry);
+            NavigationManager.NavigateTo("/journal");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving entry: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteEntry()
+    {
+        if (entry.Id > 0)
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this entry?");
+            if (confirmed)
+            {
+                await JournalService.DeleteEntryAsync(entry.Id);
+                NavigationManager.NavigateTo("/journal");
+            }
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/journal");
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(entry.Title) &&
+               wordCount > 0 &&
+               !string.IsNullOrWhiteSpace(entry.PrimaryMood);
+    }
+
+    private string GetMoodEmoji(string? mood)
+    {
+        if (string.IsNullOrEmpty(mood))
+            return string.Empty;
+        
+        return mood switch
+        {
+            "Happy" => "😊",
+            "Excited" => "🤩",
+            "Relaxed" => "😌",
+            "Grateful" => "🙏",
+            "Confident" => "💪",
+            "Calm" => "😐",
+            "Thoughtful" => "🤔",
+            "Curious" => "🧐",
+            "Nostalgic" => "🥹",
+            "Bored" => "😑",
+            "Sad" => "😢",
+            "Angry" => "😠",
+            "Stressed" => "😰",
+            "Lonely" => "😔",
+            "Anxious" => "😟",
+            _ => string.Empty
+        };
+    }
+
+    public void Dispose()
+    {
+        wordCountTimer?.Dispose();
+    }
+}
+
+<style>
+    /*password protection*/
+    .password-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .password-dialog {
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        max-width: 400px;
+        width: 90%;
+        text-align: center;
+    }
+
+    .password-dialog h3 {
+        color: #856404;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    .password-dialog h3 i {
+        color: #ffc107;
+        font-size: 28px;
+    }
+
+    .password-dialog p {
+        color: #666;
+        margin-bottom: 20px;
+    }
+
+    .password-dialog .form-control {
+        margin-bottom: 15px;
+        padding: 12px;
+        font-size: 16px;
+        border: 2px solid #ffc107;
+        border-radius: 6px;
+        width: 100%;
+    }
+
+    .password-dialog .form-control:focus {
+        outline: none;
+        border-color: #ffb300;
+        box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+    }
+
+    .error-message {
+        color: #dc3545;
+        background: #f8d7da;
+        padding: 10px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+        font-size: 14px;
+    }
+
+    .password-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .entry-form {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .date-display {
+        font-size: 18px;
+        color: #856404;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .emoji {
+        font-size: 20px;
+        margin-left: 8px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #ffc107;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: border-color 0.3s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #ffb300;
+        box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+    }
+
+    .editor-toolbar {
+        display: flex;
+        gap: 5px;
+        margin-bottom: 0;
+        align-items: center;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 6px 6px 0 0;
+        border: 2px solid #ffc107;
+        border-bottom: 1px solid #ffc107;
+        flex-wrap: wrap;
+    }
+
+    .toolbar-divider {
+        width: 1px;
+        height: 24px;
+        background: #ddd;
+        margin: 0 5px;
+    }
+
+    .toolbar-btn {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        background: white;
+        color: #333;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        min-width: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .toolbar-btn:hover {
+        background: #fff3cd;
+        border-color: #ffc107;
+    }
+
+    .toolbar-btn:active {
+        background: #ffc107;
+        transform: scale(0.95);
+    }
+
+    .rich-text-editor {
+        min-height: 300px;
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 15px;
+        border: 2px solid #ffc107;
+        border-top: none;
+        border-radius: 0 0 6px 6px;
+        background: white;
+        color: #333;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        font-size: 15px;
+        line-height: 1.6;
+    }
+
+    .rich-text-editor:focus {
+        outline: none;
+        border-color: #ffb300;
+        box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+    }
+
+    .rich-text-editor:empty:before {
+        content: attr(placeholder);
+        color: #999;
+        pointer-events: none;
+    }
+
+    .rich-text-editor h1,
+    .rich-text-editor h2,
+    .rich-text-editor h3 {
+        margin: 0.8em 0 0.4em 0;
+        font-weight: 600;
+    }
+
+    .rich-text-editor h1 {
+        font-size: 2em;
+        border-bottom: 2px solid #ffc107;
+        padding-bottom: 0.3em;
+    }
+
+    .rich-text-editor h2 {
+        font-size: 1.5em;
+    }
+
+    .rich-text-editor h3 {
+        font-size: 1.25em;
+    }
+
+    .rich-text-editor p {
+        margin: 0.5em 0;
+    }
+
+    .rich-text-editor ul,
+    .rich-text-editor ol {
+        padding-left: 2em;
+        margin: 0.8em 0;
+    }
+
+    .rich-text-editor li {
+        margin: 0.3em 0;
+    }
+
+    .rich-text-editor strong {
+        font-weight: 700;
+    }
+
+    .rich-text-editor em {
+        font-style: italic;
+    }
+
+    .rich-text-editor u {
+        text-decoration: underline;
+    }
+
+    .tag-suggestions {
+        margin-top: 10px;
+    }
+
+    .tag-btn {
+        display: inline-block;
+        padding: 6px 12px;
+        margin: 4px;
+        border: 1px solid #ffc107;
+        background: white;
+        border-radius: 20px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .tag-btn:hover {
+        background: #fff3cd;
+    }
+
+    .tag-btn.active {
+        background: #ffc107;
+        color: #212529;
+        border-color: #ffc107;
+    }
+
+    .selected-tags {
+        margin-top: 15px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 12px;
+        background: #fff3cd;
+        border-radius: 20px;
+        font-size: 13px;
+        color: #856404;
+    }
+
+    .tag button {
+        margin-left: 8px;
+        background: none;
+        border: none;
+        color: #856404;
+        font-size: 18px;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    .actions {
+        margin-top: 30px;
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-primary {
+        background: #ffc107;
+        color: #212529;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: #ffb300;
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+
+    .alert {
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+    }
+
+    .alert-danger {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+</style>

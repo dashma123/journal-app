@@ -1,0 +1,354 @@
+@page "/journal-form"
+@page "/journal-form/{EntryId:int}"
+@using JournalApp.Services
+@using JournalApp.Models
+@inject JournalService JournalService
+@inject NavigationManager Navigation
+
+<div class="journal-form-page">
+    @if (loading)
+    {
+        <div class="loading">Loading...</div>
+    }
+    else
+    {
+        <div class="form-container">
+            <h3>@(EntryId.HasValue ? "Edit" : "New") Journal Entry</h3>
+
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" class="form-control" @bind="entry.Date" />
+            </div>
+
+            <div class="form-group">
+                <label>Title (Optional)</label>
+                <input type="text" class="form-control" @bind="entry.Title" 
+                       placeholder="Give your entry a title..." />
+            </div>
+
+            <div class="form-group">
+                <label>How are you feeling?</label>
+                <div class="mood-selector">
+                    @foreach (var mood in moods)
+                    {
+                        <button type="button" 
+                                class="mood-btn @(entry.Mood == mood.Name ? "active" : "")"
+                                @onclick="() => entry.Mood = mood.Name">
+                            <span class="mood-emoji">@mood.Emoji</span>
+                            <span class="mood-name">@mood.Name</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Sleep Times (Optional)</label>
+                <div class="time-inputs">
+                    <div>
+                        <label>Wake Up</label>
+                        <input type="time" class="form-control" 
+                               value="@(entry.WakeUpTime?.ToString("HH:mm"))"
+                               @onchange="@(e => entry.WakeUpTime = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value.ToString()!))" />
+                    </div>
+                    <div>
+                        <label>Sleep</label>
+                        <input type="time" class="form-control" 
+                               value="@(entry.SleepTime?.ToString("HH:mm"))"
+                               @onchange="@(e => entry.SleepTime = string.IsNullOrEmpty(e.Value?.ToString()) ? null : TimeOnly.Parse(e.Value.ToString()!))" />
+                    </div>
+                </div>
+            </div>
+            
+            
+            <!-- Main journal content -->
+            <div class="form-group">
+                <label>What's on your mind? *</label>
+                <textarea class="form-control" rows="10" @bind="entry.Content"
+                          placeholder="Write your thoughts here..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Tags</label>
+                <div class="tags-input">
+                    <input type="text" class="form-control" @bind="newTag" 
+                           @onkeypress="@(e => { if (e.Key == "Enter") AddTag(); })"
+                           placeholder="Add a tag and press Enter..." />
+                    <button type="button" class="btn btn-secondary" @onclick="AddTag">Add</button>
+                </div>
+                <div class="tags-list">
+                    @foreach (var tag in currentTags)
+                    {
+                        <span class="tag">
+                            @tag
+                            <button type="button" @onclick="() => RemoveTag(tag)">×</button>
+                        </span>
+                    }
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveEntry" disabled="@saving">
+                    @(saving ? "Saving..." : "Save Entry")
+                </button>
+                <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // Route parameter for editing existing entries
+    [Parameter]
+    public int? EntryId { get; set; }
+
+    private JournalEntry entry = new();
+    private bool loading = true;
+    private bool saving = false;
+    private List<string> currentTags = new();
+    private string newTag = "";
+
+    private List<(string Name, string Emoji)> moods = new()
+    {
+        ("Amazing", "😄"),
+        ("Good", "😊"),
+        ("Okay", "😐"),
+        ("Bad", "😔"),
+        ("Terrible", "😢")
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (EntryId.HasValue)
+        {
+            var existingEntry = await JournalService.GetEntryByIdAsync(EntryId.Value);
+            if (existingEntry != null)
+            {
+                entry = existingEntry;
+                currentTags = entry.GetTags();
+            }
+        }
+        else
+        {
+            entry.Date = DateTime.Now;
+        }
+        
+        loading = false;
+    }
+
+    private async Task SaveEntry()
+    {
+        if (string.IsNullOrWhiteSpace(entry.Content))
+            return;
+
+        saving = true;
+        entry.SetTags(currentTags);
+
+        if (EntryId.HasValue)
+        {
+            await JournalService.UpdateEntryAsync(entry);
+        }
+        else
+        {
+            await JournalService.AddEntryAsync(entry);
+        }
+
+        Navigation.NavigateTo("/journal-list");
+    }
+
+    private void AddTag()
+    {
+        if (!string.IsNullOrWhiteSpace(newTag) && !currentTags.Contains(newTag))
+        {
+            currentTags.Add(newTag.Trim());
+            newTag = "";
+        }
+    }
+
+    private void RemoveTag(string tag)
+    {
+        currentTags.Remove(tag);
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/journal-list");
+    }
+}
+
+<style>
+.journal-form-page {
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.form-container {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.form-group {
+    margin-bottom: 25px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+textarea.form-control {
+    resize: vertical;
+    min-height: 200px;
+}
+
+.mood-selector {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mood-btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 15px 10px;
+    border: 2px solid #e0e0e0;
+    background: white;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.mood-btn:hover {
+    border-color: #007bff;
+    transform: translateY(-2px);
+}
+
+.mood-btn.active {
+    border-color: #007bff;
+    background: #e3f2fd;
+}
+
+.mood-emoji {
+    font-size: 32px;
+}
+
+.mood-name {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.time-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.tags-input {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tag {
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tag button {
+    background: none;
+    border: none;
+    color: #1976d2;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.tag button:hover {
+    background: rgba(25, 118, 210, 0.1);
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 30px;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+    flex: 1;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #0056b3;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #545b62;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+}
+</style>
